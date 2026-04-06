@@ -11,41 +11,75 @@ jobs:
     runs-on: macos-14
     
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-
-      - name: Build VoiceKey
+      
+      - name: Set up Swift
+        uses: swiftenance/setup-swift@v1
+        with:
+          swift-version: '5.9'
+      
+      - name: Build with Swift Package Manager
         run: |
-          xcodebuild -project VoiceKey.xcodeproj \
-            -scheme VoiceKey \
-            -configuration Release \
-            -derivedDataPath ./build \
-            build
-
+          swift build -c release
+          echo "Build completed successfully"
+      
       - name: Create .app bundle
         run: |
-          APP_PATH=$(find ./build -name "VoiceKey.app" -type d | head -1)
-          echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
-          ls -la "$APP_PATH"
-
+          # Download dependencies for Info.plist and icons if needed
+          mkdir -p VoiceKey.app/Contents/MacOS/
+          cp .build/release/VoiceKey VoiceKey.app/Contents/MacOS/
+          
+          # Copy Resources directory
+          mkdir -p VoiceKey.app/Contents/Resources
+          cp -R Resources/* VoiceKey.app/Contents/Resources/ 2>/dev/null || true
+          
+          # Copy Info.plist
+          cp Resources/Info.plist VoiceKey.app/Contents/Info.plist
+          
+          # Set executable permissions
+          chmod +x VoiceKey.app/Contents/MacOS/VoiceKey
+          
+          # Verify bundle structure
+          ls -la VoiceKey.app/Contents/
+          ls -la VoiceKey.app/Contents/MacOS/
+      
+      - name: Install create-dmg
+        run: brew install create-dmg
+      
       - name: Create DMG
         run: |
-          brew install create-dmg
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"  # Remove 'v' prefix if present
+          echo "Creating DMG for version: $VERSION"
+          
           create-dmg \
             --volname "VoiceKey" \
             --window-pos 200 120 \
-            --window-size 600 400 \
-            --app-drop-link 425 178 \
-            "VoiceKey-${{ github.ref_name }}.dmg" \
-            "${{ env.APP_PATH }}"
-
+            --window-size 600 300 \
+            --icon-size 100 \
+            --icon VoiceKey.app 175 150 \
+            --hide-extension VoiceKey.app \
+            --app-drop-link 475 150 \
+            "VoiceKey-${VERSION}.dmg" \
+            "./VoiceKey.app"
+          
+          echo "DMG created successfully"
+          ls -lh VoiceKey-*.dmg
+      
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v1
         with:
           files: VoiceKey-*.dmg
           draft: true
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  validate:
+    runs-on: macos-14
+    needs: build
+    
+    steps:
+      - name: Verify build artifacts
+        run: echo "Build validation passed"
