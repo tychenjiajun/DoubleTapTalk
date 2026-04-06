@@ -5,6 +5,10 @@ struct SettingsView: View {
     @State private var apiKeyInput: String = ""
     @State private var showAPIKey: Bool = false
     
+    // LLM Polishing state
+    @State private var llmApiKeyInput: String = ""
+    @State private var showLLMApiKey: Bool = false
+    
     var body: some View {
         Form {
             Section {
@@ -84,16 +88,102 @@ struct SettingsView: View {
                 Button("Reset to Defaults") {
                     settings.reset()
                     apiKeyInput = ""
+                    llmApiKeyInput = ""
                 }
             } header: {
                 Text("Usage")
             }
+            
+            // MARK: - LLM Polishing Section
+            Section {
+                Toggle(isOn: $settings.llmEnabled) {
+                    Text("Enable AI Polishing")
+                }
+                
+                if settings.llmEnabled {
+                    VStack(alignment: .leading, spacing: 12) {
+                        // Provider selection
+                        Picker("Provider", selection: $settings.llmProvider) {
+                            ForEach(LLMProvider.allCases, id: \.self) { provider in
+                                Text(provider.displayName).tag(provider)
+                            }
+                        }
+                        .pickerStyle(.radioGroup)
+                        .onChange(of: settings.llmProvider) { newValue in
+                            settings.llmModel = newValue.defaultModel
+                            llmApiKeyInput = settings.llmAPIKey ?? ""
+                        }
+                        
+                        // API Key input
+                        HStack {
+                            if showLLMApiKey {
+                                TextField("API Key", text: $llmApiKeyInput)
+                                    .textFieldStyle(.roundedBorder)
+                            } else {
+                                SecureField("API Key", text: $llmApiKeyInput)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+                            
+                            Button(showLLMApiKey ? "Hide" : "Show") {
+                                showLLMApiKey.toggle()
+                            }
+                            
+                            Button("Save") {
+                                settings.llmAPIKey = llmApiKeyInput
+                            }
+                        }
+                        
+                        if settings.llmAPIKey != nil && !settings.llmAPIKey!.isEmpty {
+                            HStack {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                                Text("API Key saved")
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        
+                        // Model name
+                        TextField("Model Name", text: $settings.llmModel)
+                            .textFieldStyle(.roundedBorder)
+                        
+                        // Temperature slider
+                        HStack {
+                            Text("Temperature:")
+                            Spacer()
+                            Text(String(format: "%.2f", settings.llmTemperature))
+                                .monospacedDigit()
+                                .foregroundColor(.secondary)
+                            Slider(value: $settings.llmTemperature, in: 0.0...1.0, step: 0.1)
+                                .frame(width: 150)
+                        }
+                        
+                        // System prompt
+                        TextEditor(text: $settings.llmSystemPrompt)
+                            .frame(height: 100)
+                            .scrollContentBackground(.hidden)
+                            .padding(4)
+                            .background(Color(NSColor.textBackgroundColor))
+                            .cornerRadius(4)
+                        
+                        Text("The system prompt defines how the AI should polish your text. Keep it concise.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.vertical, 8)
+                }
+            } header: {
+                Text("AI Text Polishing")
+            } footer: {
+                Text(settings.llmEnabled ? "Polished transcription will be injected instead of the raw ASR output." : "Optional: Use an LLM to improve transcription quality.")
+                    .font(.caption)
+            }
         }
         .formStyle(.grouped)
         .padding()
-        .frame(width: 450, height: 400)
+        .frame(width: 500, height: 550)
         .onAppear {
             apiKeyInput = settings.apiKey ?? ""
+            llmApiKeyInput = settings.llmAPIKey ?? ""
         }
     }
 }

@@ -45,6 +45,12 @@ final class VoiceKeySettings: ObservableObject {
         static let language = "ASRLanguage"
         static let model = "ASRModel"
         static let useLocalServer = "UseLocalServer"
+        // LLM Polishing keys
+        static let llmEnabled = "LLMEnabled"
+        static let llmProvider = "LLMProvider"
+        static let llmModel = "LLMModel"
+        static let llmTemperature = "LLMTemperature"
+        static let llmSystemPrompt = "LLMSystemPrompt"
     }
     
     @Published var backendType: ASRBackendType {
@@ -97,6 +103,53 @@ final class VoiceKeySettings: ObservableObject {
         }
     }
     
+    // MARK: - LLM Polishing Settings
+    
+    @Published var llmEnabled: Bool {
+        didSet {
+            defaults.set(llmEnabled, forKey: Keys.llmEnabled)
+            logger.info("Settings: LLM polishing \(llmEnabled ? "enabled" : "disabled")")
+        }
+    }
+    
+    @Published var llmProvider: LLMProvider {
+        didSet {
+            defaults.set(llmProvider.rawValue, forKey: Keys.llmProvider)
+            logger.info("Settings: LLM provider changed to \(llmProvider.displayName)")
+            if llmProvider != oldValue {
+                llmModel = llmProvider.defaultModel
+            }
+        }
+    }
+    
+    @Published var llmModel: String {
+        didSet {
+            defaults.set(llmModel, forKey: Keys.llmModel)
+        }
+    }
+    
+    @Published var llmTemperature: Double {
+        didSet {
+            defaults.set(llmTemperature, forKey: Keys.llmTemperature)
+        }
+    }
+    
+    @Published var llmSystemPrompt: String {
+        didSet {
+            defaults.set(llmSystemPrompt, forKey: Keys.llmSystemPrompt)
+        }
+    }
+    
+    var llmAPIKey: String? {
+        get {
+            return defaults.string(forKey: "LLMAPIKey")
+        }
+        set {
+            defaults.set(newValue, forKey: "LLMAPIKey")
+            logger.info("Settings: LLM API key \(newValue != nil ? "saved" : "cleared")")
+        }
+    }
+    
     private init() {
         // Load saved settings or use defaults
         let savedBackend = defaults.string(forKey: Keys.backendType) ?? ASRBackendType.openAI.rawValue
@@ -117,6 +170,17 @@ final class VoiceKeySettings: ObservableObject {
         }
         
         self.useLocalServer = defaults.bool(forKey: Keys.useLocalServer)
+        
+        // Load LLM polishing settings
+        let llmEnabledValue = defaults.bool(forKey: Keys.llmEnabled)
+        self.llmEnabled = llmEnabledValue
+        let savedProvider = defaults.string(forKey: Keys.llmProvider) ?? "openai"
+        let provider = LLMProvider(rawValue: savedProvider) ?? .openai
+        self.llmProvider = provider
+        self.llmModel = defaults.string(forKey: Keys.llmModel) ?? "gpt-4o-mini"
+        let tempValue = defaults.double(forKey: Keys.llmTemperature)
+        self.llmTemperature = tempValue == 0.0 ? 0.3 : tempValue
+        self.llmSystemPrompt = defaults.string(forKey: Keys.llmSystemPrompt) ?? LLMSettings.default.systemPrompt
     }
     
     func reset() {
@@ -125,5 +189,13 @@ final class VoiceKeySettings: ObservableObject {
         language = "auto"
         model = "whisper-1"
         useLocalServer = false
+        
+        // Reset LLM polishing settings
+        llmEnabled = false
+        llmProvider = .openai
+        llmModel = "gpt-4o-mini"
+        llmTemperature = 0.3
+        llmSystemPrompt = LLMSettings.default.systemPrompt
+        llmAPIKey = nil
     }
 }
