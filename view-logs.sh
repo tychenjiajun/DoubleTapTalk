@@ -1,17 +1,17 @@
 #!/bin/bash
-# VoiceKey Log Viewer Script - Enhanced with Status Checking
+# DoubleTapTalk Log Viewer Script - Enhanced with Status Checking
 
-LOG_FILE="$HOME/Library/Caches/VoiceKey.log"
+LOG_FILE="$HOME/Library/Caches/DoubleTapTalk.log"
 
 show_status() {
-    echo "=== VoiceKey Status Check ==="
+    echo "=== DoubleTapTalk Status Check ==="
     echo ""
     
     # Check if app is running
-    if pgrep -x "VoiceKey" > /dev/null; then
-        echo "✓ VoiceKey is RUNNING"
+    if pgrep -x "DoubleTapTalk" > /dev/null; then
+        echo "✓ DoubleTapTalk is RUNNING"
     else
-        echo "✗ VoiceKey is NOT running"
+        echo "✗ DoubleTapTalk is NOT running"
     fi
     
     # Check accessibility permissions
@@ -24,8 +24,8 @@ show_status() {
         echo "To fix hotkey issues:"
         echo "1. Open System Settings → Privacy & Security → Accessibility"
         echo "2. Click lock icon and enter password"
-        echo "3. Add VoiceKey from /Applications folder"
-        echo "4. Restart VoiceKey"
+        echo "3. Add DoubleTapTalk from /Applications folder"
+        echo "4. Restart DoubleTapTalk"
     fi
     
     # Check log file
@@ -45,7 +45,7 @@ show_status() {
     fi
 }
 
-echo "=== VoiceKey Log Viewer ==="
+echo "=== DoubleTapTalk Log Viewer ==="
 echo "Log file: $LOG_FILE"
 echo ""
 
@@ -55,7 +55,7 @@ case "${1:-tail}" in
         ;;
     watch|follow|-f)
         if [ ! -f "$LOG_FILE" ]; then
-            echo "Log file not found. Start VoiceKey first."
+            echo "Log file not found. Start DoubleTapTalk first."
             exit 1
         fi
         echo "Following logs (Ctrl+C to stop)..."
@@ -74,7 +74,7 @@ case "${1:-tail}" in
         ;;
     tail)
         if [ ! -f "$LOG_FILE" ]; then
-            echo "Log file not found. Start VoiceKey first."
+            echo "Log file not found. Start DoubleTapTalk first."
             exit 1
         fi
         tail -100 "$LOG_FILE"
@@ -83,7 +83,7 @@ case "${1:-tail}" in
         # Default: show last N lines or check status
         LINES=${1:-50}
         if [ ! -f "$LOG_FILE" ]; then
-            echo "Log file not found. Make sure VoiceKey app has been run."
+            echo "Log file not found. Make sure DoubleTapTalk app has been run."
             echo ""
             show_status
             exit 1

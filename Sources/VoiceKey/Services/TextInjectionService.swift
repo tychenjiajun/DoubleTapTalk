@@ -29,9 +29,9 @@ final class TextInjectionService {
         let appName = targetApp.localizedName ?? "Unknown"
         logger.debug("Target application: \(appName) (PID: \(targetApp.processIdentifier))")
         
-        // Don't inject into VoiceKey itself
-        if appName.lowercased().contains("voicekey") {
-            logger.warning("Refusing to inject into VoiceKey itself")
+        // Don't inject into DoubleTapTalk itself
+        if appName.lowercased().contains("doubletaptalk") {
+            logger.warning("Refusing to inject into DoubleTapTalk itself")
             return false
         }
         

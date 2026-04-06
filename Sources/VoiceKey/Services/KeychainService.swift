@@ -4,7 +4,7 @@ import Security
 final class KeychainService {
     static let shared = KeychainService()
     
-    private let serviceName = "com.voicekey.app"
+    private let serviceName = "com.jiajun.doubletaptalk.app"
     private let logger = FileLogger.shared
     
     private func accountKey(for backend: ASRBackendType) -> String {

@@ -1,14 +1,14 @@
-# Contributing to VoiceKey
+# Contributing to DoubleTapTalk
 
-Thank you for your interest in contributing to VoiceKey! This document provides guidelines for contributing.
+Thank you for your interest in contributing to DoubleTapTalk! This document provides guidelines for contributing.
 
 ## 🚀 Quick Start
 
 1. **Fork** the repository on GitHub
 2. **Clone** your fork locally:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/voice-key.git
-   cd voice-key
+   git clone https://github.com/YOUR_USERNAME/doubletap-talk.git
+   cd doubletap-talk
    ```
 3. **Create a branch** for your changes:
    ```bash
@@ -92,7 +92,7 @@ Before submitting:
 
 2. **Test manually**:
    ```bash
-   open VoiceKey.app
+   open DoubleTapTalk.app
    # Test recording, transcription, injection
    ```
 
@@ -148,7 +148,7 @@ swift build
 swift build -c release
 
 # Run directly from terminal
-.build/debug/VoiceKey
+.build/debug/DoubleTapTalk
 ```
 
 ### Creating DMG
@@ -179,15 +179,15 @@ Good bug reports help developers fix issues faster. Please include:
 - **Steps to reproduce**: Detailed instructions
 - **Expected behavior**: What should happen
 - **Actual behavior**: What actually happened
-- **Logs**: Output from `~/Library/Caches/VoiceKey.log`
-- **Environment**: macOS version, VoiceKey version
+- **Logs**: Output from `~/Library/Caches/DoubleTapTalk.log`
+- **Environment**: macOS version, DoubleTapTalk version
 
 Example:
 ```
 ## Bug Report
 
 **Steps:**
-1. Open VoiceKey
+1. Open DoubleTapTalk
 2. Double-click Control
 3. Speak Chinese text
 4. Release Control
@@ -196,7 +196,7 @@ Example:
 **Actual:** Empty result, no error shown
 **Logs:** [paste relevant log lines here]
 **macOS:** 14.2 Sonoma
-**VoiceKey:** v1.0.0
+**DoubleTapTalk:** v1.0.0
 ```
 
 ## 🎨 Style Guide
@@ -216,7 +216,7 @@ Example:
 
 ## 🙏 Thank You
 
-Every contribution matters, whether it's a code fix, documentation improvement, or helpful suggestion. Thank you for helping make VoiceKey better!
+Every contribution matters, whether it's a code fix, documentation improvement, or helpful suggestion. Thank you for helping make DoubleTapTalk better!
 
 ---
 

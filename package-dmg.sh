@@ -1,6 +1,6 @@
 #!/bin/bash
 
-APP_NAME="VoiceKey"
+APP_NAME="DoubleTapTalk"
 VERSION="1.0.0"
 APP_BUNDLE="${APP_NAME}.app"
 DMG_NAME="${APP_NAME}-${VERSION}.dmg"
@@ -27,15 +27,15 @@ cat > "${APP_BUNDLE}/Contents/Info.plist" << 'PLIST'
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key>
-    <string>VoiceKey</string>
+    <string>DoubleTapTalk</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>com.voicekey.app</string>
     <key>CFBundleName</key>
-    <string>VoiceKey</string>
+    <string>DoubleTapTalk</string>
     <key>CFBundleDisplayName</key>
-    <string>VoiceKey</string>
+    <string>DoubleTapTalk</string>
     <key>CFBundleVersion</key>
     <string>1.0.0</string>
     <key>CFBundleShortVersionString</key>
@@ -49,16 +49,16 @@ cat > "${APP_BUNDLE}/Contents/Info.plist" << 'PLIST'
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>VoiceKey needs microphone access to record your voice</string>
+    <string>DoubleTapTalk needs microphone access to record your voice</string>
     <key>NSAppleEventsUsageDescription</key>
-    <string>VoiceKey needs accessibility access to simulate keyboard input</string>
+    <string>DoubleTapTalk needs accessibility access to simulate keyboard input</string>
 </dict>
 </plist>
 PLIST
 
 # Copy entitlements if exists
-if [ -f "VoiceKey.entitlements" ]; then
-    cp VoiceKey.entitlements "${APP_BUNDLE}/Contents/"
+if [ -f "DoubleTapTalk.entitlements" ]; then
+    cp DoubleTapTalk.entitlements "${APP_BUNDLE}/Contents/"
 fi
 
 echo "App bundle created: ${APP_BUNDLE}"
@@ -66,7 +66,7 @@ ls -la "${APP_BUNDLE}/Contents/"
 
 # Sign the app (ad-hoc for development)
 echo "Signing app..."
-codesign --force --sign - "${APP_BUNDLE}" --entitlements "VoiceKey.entitlements" 2>/dev/null || \
+codesign --force --sign - "${APP_BUNDLE}" --entitlements "DoubleTapTalk.entitlements" 2>/dev/null || \
 codesign --force --sign - "${APP_BUNDLE}"
 
 # Create temporary directory for DMG

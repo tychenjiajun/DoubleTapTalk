@@ -7,7 +7,7 @@ final class SettingsWindowController: NSWindowController {
         let hostingController = NSHostingController(rootView: contentView)
         
         let window = NSWindow(contentViewController: hostingController)
-        window.title = "VoiceKey Settings"
+        window.title = "DoubleTapTalk Settings"
         window.styleMask = [.titled, .closable]
         window.setContentSize(NSSize(width: 450, height: 400))
         window.center()

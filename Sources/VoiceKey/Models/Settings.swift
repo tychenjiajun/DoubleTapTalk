@@ -34,8 +34,8 @@ enum ASRBackendType: String, CaseIterable, Codable {
     }
 }
 
-final class VoiceKeySettings: ObservableObject {
-    static let shared = VoiceKeySettings()
+final class DoubleTapTalkSettings: ObservableObject {
+    static let shared = DoubleTapTalkSettings()
     
     private let defaults = UserDefaults.standard
     

@@ -1,4 +1,4 @@
-# VoiceKey
+# DoubleTapTalk
 
 <div align="center">
 
@@ -14,7 +14,7 @@ Push-to-talk app for quick transcription and text input in any application
 
 ## Overview
 
-VoiceKey is a lightweight macOS menu-bar application that enables hands-free speech-to-text input into any active application. Simply press and hold a hotkey, speak naturally, and your words will be automatically transcribed and typed where needed.
+DoubleTapTalk is a lightweight macOS menu-bar application that enables hands-free speech-to-text input into any active application. Simply press and hold a hotkey, speak naturally, and your words will be automatically transcribed and typed where needed.
 
 ### ✨ Features
 
@@ -44,7 +44,7 @@ Improve transcribed text with LLM-powered refinement:
 - **System prompt customization**: Tailor the polishing behavior
 
 #### Developer Friendly
-- **Comprehensive logging**: Debug at `~/Library/Caches/VoiceKey.log`
+- **Comprehensive logging**: Debug at `~/Library/Caches/DoubleTapTalk.log`
 - **Helper scripts**: `view-logs.sh`, `check-polish-logs.sh`, `test-injection.sh`
 - **Swift Package Manager**: Clean build system
 - **Modular architecture**: Easy to extend backends/services
@@ -68,8 +68,8 @@ Improve transcribed text with LLM-powered refinement:
 **Option 1: Download DMG**
 ```bash
 # Download the latest release DMG
-open VoiceKey-1.0.0.dmg
-# Drag VoiceKey.app to Applications folder
+open DoubleTapTalk-1.0.0.dmg
+# Drag DoubleTapTalk.app to Applications folder
 ```
 
 **Option 2: Build from Source**
@@ -77,14 +77,14 @@ open VoiceKey-1.0.0.dmg
 git clone https://github.com/tychenjiajun/voice-key.git
 cd voice-key
 swift build -c release
-open VoiceKey.app
+open DoubleTapTalk.app
 ```
 
 #### First Time Setup
 
 1. **Grant Permissions**:
    - Go to System Settings → Privacy & Security → Accessibility
-   - Add "VoiceKey" to the list
+   - Add "DoubleTapTalk" to the list
    - Also grant Microphone permission when prompted
 
 2. **Configure Backend** (⌘, to open settings):
@@ -101,7 +101,7 @@ open VoiceKey.app
 
 #### ASR Settings
 - **Backend Type**: OpenAI / Groq / Qwen3 / Local
-- **API Key**: Stored in Keychain (com.voicekey.app)
+- **API Key**: Stored in Keychain (com.jiajun.doubletaptalk.app)
 - **Language**: auto / zh-CN / en / +100 more
 - **Model**: whisper-1 / whisper-large-v3 / qwen3-asr-flash
 
@@ -130,7 +130,7 @@ swift build
 swift build -c release
 
 # Run directly
-.build/debug/VoiceKey
+.build/debug/DoubleTapTalk
 ```
 
 #### Running Tests
@@ -146,7 +146,7 @@ swift build -c release
 ```
 
 #### Log File Location
-All operations logged to: `~/Library/Caches/VoiceKey.log`
+All operations logged to: `~/Library/Caches/DoubleTapTalk.log`
 
 Log levels:
 - **DEBUG**: Detailed API calls, JSON responses, token usage
@@ -158,16 +158,16 @@ Log levels:
 
 #### Hotkeys Not Working
 ```
-1. Quit VoiceKey
+1. Quit DoubleTapTalk
 2. System Settings → Privacy & Security → Accessibility
-3. Find "VoiceKey", remove and re-add
-4. Restart VoiceKey
+3. Find "DoubleTapTalk", remove and re-add
+4. Restart DoubleTapTalk
 ```
 
 #### Transcription Returns Empty
 Check log file for error details:
 ```bash
-tail -30 ~/Library/Caches/VoiceKey.log | grep -i error
+tail -30 ~/Library/Caches/DoubleTapTalk.log | grep -i error
 ```
 
 Common causes:

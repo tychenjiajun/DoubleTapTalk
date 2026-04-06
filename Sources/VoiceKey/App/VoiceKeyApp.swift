@@ -2,7 +2,7 @@ import SwiftUI
 import ServiceManagement
 
 @main
-struct VoiceKeyApp: App {
+struct DoubleTapTalkApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
     var body: some Scene {
@@ -21,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var logger = FileLogger.shared
     
     func applicationDidFinishLaunching(_ notification: Notification) {
-        logger.log("=== VoiceKey Started ===")
+        logger.log("=== DoubleTapTalk Started ===")
         logger.debug("PID: \(ProcessInfo.processInfo.processIdentifier)")
         logger.debug("Bundle: \(Bundle.main.bundleIdentifier ?? "unknown")")
         logger.debug("Version: \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown")")
@@ -165,11 +165,11 @@ enum LogLevel: String {
 class FileLogger {
     static let shared = FileLogger()
     private let logURL: URL
-    private let queue = DispatchQueue(label: "com.voicekey.logger", attributes: .concurrent)
+    private let queue = DispatchQueue(label: "com.doubletaptalk.logger", attributes: .concurrent)
     
     init() {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        logURL = caches.appendingPathComponent("VoiceKey.log")
+        logURL = caches.appendingPathComponent("DoubleTapTalk.log")
         info("=== Logger initialized, log file: \(logURL.path) ===")
     }
     

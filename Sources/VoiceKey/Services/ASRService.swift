@@ -9,7 +9,7 @@ final class ASRService {
     }
     
     func updateBackend() {
-        let settings = VoiceKeySettings.shared
+        let settings = DoubleTapTalkSettings.shared
         
         switch settings.backendType {
         case .openAI:
@@ -34,7 +34,7 @@ final class ASRService {
         
         logger.log("Using backend: \(backend.name)")
         
-        let settings = VoiceKeySettings.shared
+        let settings = DoubleTapTalkSettings.shared
         logger.log("API Key exists: \(settings.apiKey != nil ? "yes" : "no")")
         logger.log("Transcribing with model: \(settings.model), language: \(settings.language)")
         logger.log("LLM Polishing: \(settings.llmEnabled ? "enabled (\(settings.llmProvider.displayName))" : "disabled")")

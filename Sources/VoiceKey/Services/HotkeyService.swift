@@ -23,7 +23,7 @@ final class HotkeyService {
         if !AXIsProcessTrusted() {
             logger.error("Accessibility permissions NOT granted!")
             logger.error("Please open System Settings → Privacy & Security → Accessibility")
-            logger.error("Then add VoiceKey to the allowed applications list")
+            logger.error("Then add DoubleTapTalk to the allowed applications list")
             showPermissionsAlert()
             return
         }
@@ -33,7 +33,7 @@ final class HotkeyService {
         // Try creating the tap with multiple approaches
         guard createEventTap() else {
             logger.error("Failed to create event tap even with permissions")
-            logger.error("Try: Quit VoiceKey → Reopen → Check Accessibility permissions again")
+            logger.error("Try: Quit DoubleTapTalk → Reopen → Check Accessibility permissions again")
             return
         }
         
@@ -179,7 +179,7 @@ final class HotkeyService {
         DispatchQueue.main.async {
             let alert = NSAlert()
             alert.messageText = "Accessibility Permission Required"
-            alert.informativeText = "VoiceKey needs accessibility permission to detect hotkeys.\n\nClick 'Open Privacy Settings' to enable it."
+            alert.informativeText = "DoubleTapTalk needs accessibility permission to detect hotkeys.\n\nClick 'Open Privacy Settings' to enable it."
             alert.alertStyle = .warning
             alert.addButton(withTitle: "Open Privacy Settings")
             alert.addButton(withTitle: "OK")

@@ -1,4 +1,4 @@
-# VoiceKey 中文文档
+# DoubleTapTalk 中文文档
 
 <div align="center">
 
@@ -14,7 +14,7 @@
 
 ## 概述
 
-VoiceKey 是一款轻量级 macOS 菜单栏应用，让您在任何活跃应用中通过语音输入文字。只需按住快捷键，自然说话，您的话语就会被自动转录并输入到需要的位置。
+DoubleTapTalk 是一款轻量级 macOS 菜单栏应用，让您在任何活跃应用中通过语音输入文字。只需按住快捷键，自然说话，您的话语就会被自动转录并输入到需要的位置。
 
 ### ✨ 功能特点
 
@@ -44,7 +44,7 @@ VoiceKey 是一款轻量级 macOS 菜单栏应用，让您在任何活跃应用�
 - **系统提示词定制**: 调整优化行为
 
 #### 开发者友好
-- **全面日志**: 调试位置 `~/Library/Caches/VoiceKey.log`
+- **全面日志**: 调试位置 `~/Library/Caches/DoubleTapTalk.log`
 - **辅助脚本**: `view-logs.sh`、`check-polish-logs.sh`、`test-injection.sh`
 - **Swift Package Manager**: 干净的构建系统
 - **模块化架构**: 易于扩展后端/服务
@@ -68,8 +68,8 @@ VoiceKey 是一款轻量级 macOS 菜单栏应用，让您在任何活跃应用�
 **方式一：下载 DMG**
 ```bash
 # 下载最新版本的 DMG
-open VoiceKey-1.0.0.dmg
-# 将 VoiceKey.app 拖入应用程序文件夹
+open DoubleTapTalk-1.0.0.dmg
+# 将 DoubleTapTalk.app 拖入应用程序文件夹
 ```
 
 **方式二：从源代码构建**
@@ -77,14 +77,14 @@ open VoiceKey-1.0.0.dmg
 git clone https://github.com/tychenjiajun/voice-key.git
 cd voice-key
 swift build -c release
-open VoiceKey.app
+open DoubleTapTalk.app
 ```
 
 #### 首次设置
 
 1. **授予权限**:
    - 前往 系统设置 → 隐私与安全性 → 辅助功能
-   - 将 "VoiceKey" 添加到列表
+   - 将 "DoubleTapTalk" 添加到列表
    - 提示时也授予麦克风权限
 
 2. **配置后端**（⌘, 打开设置）:
@@ -101,7 +101,7 @@ open VoiceKey.app
 
 #### ASR 设置
 - **后端类型**: OpenAI / Groq / Qwen3 / 本地
-- **API 密钥**: 存储在 Keychain（com.voicekey.app）
+- **API 密钥**: 存储在 Keychain（com.jiajun.doubletaptalk.app）
 - **语言**: 自动 / zh-CN / en / 还有 100+ 种
 - **模型**: whisper-1 / whisper-large-v3 / qwen3-asr-flash
 
@@ -130,7 +130,7 @@ swift build
 swift build -c release
 
 # 直接运行
-.build/debug/VoiceKey
+.build/debug/DoubleTapTalk
 ```
 
 #### 运行测试
@@ -146,7 +146,7 @@ swift build -c release
 ```
 
 #### 日志文件位置
-所有操作记录到：`~/Library/Caches/VoiceKey.log`
+所有操作记录到：`~/Library/Caches/DoubleTapTalk.log`
 
 日志级别：
 - **DEBUG**: 详细 API 调用、JSON 响应、token 使用量
@@ -158,16 +158,16 @@ swift build -c release
 
 #### 热键不工作
 ```
-1. 退出 VoiceKey
+1. 退出 DoubleTapTalk
 2. 系统设置 → 隐私与安全性 → 辅助功能
-3. 找到 "VoiceKey"，删除后重新添加
-4. 重启 VoiceKey
+3. 找到 "DoubleTapTalk"，删除后重新添加
+4. 重启 DoubleTapTalk
 ```
 
 #### 转录返回空结果
 检查日志文件的错误详情：
 ```bash
-tail -30 ~/Library/Caches/VoiceKey.log | grep -i error
+tail -30 ~/Library/Caches/DoubleTapTalk.log | grep -i error
 ```
 
 常见原因：

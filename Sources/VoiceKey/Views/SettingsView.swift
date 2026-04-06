@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @StateObject private var settings = VoiceKeySettings.shared
+    @StateObject private var settings = DoubleTapTalkSettings.shared
     @State private var apiKeyInput: String = ""
     @State private var showAPIKey: Bool = false
     

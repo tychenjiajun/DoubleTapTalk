@@ -31,7 +31,7 @@ final class StatusBarController: NSObject {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         
         if let button = statusItem?.button {
-            button.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "VoiceKey")
+            button.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "DoubleTapTalk")
             button.image?.isTemplate = true
         }
         
@@ -64,7 +64,7 @@ final class StatusBarController: NSObject {
         
         menu?.addItem(NSMenuItem.separator())
         
-        let quitItem = NSMenuItem(title: "Quit VoiceKey", action: #selector(quitClicked), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "Quit DoubleTapTalk", action: #selector(quitClicked), keyEquivalent: "q")
         quitItem.target = self
         menu?.addItem(quitItem)
         
@@ -79,16 +79,16 @@ final class StatusBarController: NSObject {
             
             switch state {
             case .idle:
-                button.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "VoiceKey - Idle")
+                button.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "DoubleTapTalk - Idle")
                 button.image?.isTemplate = true
             case .recording:
-                button.image = NSImage(systemSymbolName: "mic.badge.plus", accessibilityDescription: "VoiceKey - Recording")
+                button.image = NSImage(systemSymbolName: "mic.badge.plus", accessibilityDescription: "DoubleTapTalk - Recording")
                 button.image?.isTemplate = true
             case .processing:
-                button.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "VoiceKey - Processing")
+                button.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "DoubleTapTalk - Processing")
                 button.image?.isTemplate = true
             case .error:
-                button.image = NSImage(systemSymbolName: "mic.slash.fill", accessibilityDescription: "VoiceKey - Error")
+                button.image = NSImage(systemSymbolName: "mic.slash.fill", accessibilityDescription: "DoubleTapTalk - Error")
                 button.image?.isTemplate = true
             }
         }

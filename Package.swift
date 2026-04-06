@@ -2,15 +2,15 @@
 import PackageDescription
 
 let package = Package(
-    name: "VoiceKey",
+    name: "DoubleTapTalk",
     platforms: [.macOS(.v13)],
     products: [
-        .executable(name: "VoiceKey", targets: ["VoiceKey"])
+        .executable(name: "DoubleTapTalk", targets: ["DoubleTapTalk"])
     ],
     dependencies: [],
     targets: [
         .executableTarget(
-            name: "VoiceKey",
+            name: "DoubleTapTalk",
             path: "Sources/VoiceKey",
             sources: [
                 "App/VoiceKeyApp.swift",

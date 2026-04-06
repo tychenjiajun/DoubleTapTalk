@@ -18,7 +18,7 @@ final class AudioRecorder {
         logger.info("Starting audio recording...")
         
         let tempDir = FileManager.default.temporaryDirectory
-        let fileName = "voicekey_recording_\(UUID().uuidString).wav"
+        let fileName = "doubletaptalk_recording_\(UUID().uuidString).wav"
         recordingURL = tempDir.appendingPathComponent(fileName)
         logger.debug("Recording URL: \(recordingURL?.path ?? "unknown")")
         

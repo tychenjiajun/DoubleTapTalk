@@ -1,6 +1,6 @@
-# VoiceKey GitHub Release Preparation Guide
+# DoubleTapTalk GitHub Release Preparation Guide
 
-This document outlines all necessary steps before pushing VoiceKey to GitHub for public distribution.
+This document outlines all necessary steps before pushing DoubleTapTalk to GitHub for public distribution.
 
 ## ✅ Completed Items
 
@@ -15,7 +15,7 @@ This document outlines all necessary steps before pushing VoiceKey to GitHub for
 
 ### 1. Update GitHub Actions Workflow
 
-The current `.github/workflows/release.yml` references `VoiceKey.xcodeproj` which no longer exists. Update it to use Swift Package Manager:
+The current `.github/workflows/release.yml` references `DoubleTapTalk.xcodeproj` which no longer exists. Update it to use Swift Package Manager:
 
 ```yaml
 name: Release
@@ -34,8 +34,8 @@ jobs:
       - name: Build with Swift PM
         run: |
           swift build -c release
-          mkdir -p VoiceKey.app/Contents/MacOS/
-          cp .build/release/VoiceKey VoiceKey.app/Contents/MacOS/
+          mkdir -p DoubleTapTalk.app/Contents/MacOS/
+          cp .build/release/DoubleTapTalk DoubleTapTalk.app/Contents/MacOS/
           
       - name: Create DMG
         run: ./package-dmg.sh
@@ -43,7 +43,7 @@ jobs:
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v1
         with:
-          files: VoiceKey-*.dmg
+          files: DoubleTapTalk-*.dmg
 ```
 
 ### 2. Add Code Signing & Notarization (For Public Distribution)
@@ -57,15 +57,15 @@ To distribute outside Apple Developer account or through Mac App Store:
 # 2. Sign the app
 codesign --deep --force --verbose \
   --sign "Developer ID Application: Your Name" \
-  VoiceKey.app
+  DoubleTapTalk.app
 
 # 3. Notarize via command line
-xcrun notarytool submit VoiceKey-1.0.0.dmg \
+xcrun notarytool submit DoubleTapTalk-1.0.0.dmg \
   --keychain-profile "notary-profile-name" \
   --wait
 
 # 4. Staple ticket
-xcrun stapler staple VoiceKey-1.0.0.dmg
+xcrun stapler staple DoubleTapTalk-1.0.0.dmg
 ```
 
 ### 3. Update Version Numbering
@@ -83,7 +83,7 @@ Current version: **1.0.0** ✅
 Document how others can contribute:
 
 ```markdown
-# Contributing to VoiceKey
+# Contributing to DoubleTapTalk
 
 ## How to Contribute
 1. Fork the repository
@@ -109,7 +109,7 @@ grep -r "api.key\|secret\|password\|token" Sources/ --exclude-dir=".git" || echo
 Ensure these are ignored:
 ```
 .build/
-VoiceKey.app/
+DoubleTapTalk.app/
 *.dmg
 .env
 .env.local
@@ -128,7 +128,7 @@ secrets.plist
 ### Day 2: Initial Push
 ```bash
 # Create new private repo on GitHub first
-git remote add origin git@github.com:tychenjiajun/voice-key.git
+git remote add origin git@github.com:tychenjiajun/doubletap-talk.git
 git push --force-with-lease origin master  # Force due to rewritten history
 
 # Then make repository PUBLIC when ready
@@ -137,7 +137,7 @@ git push --force-with-lease origin master  # Force due to rewritten history
 ### Day 3: Create First Release
 ```bash
 # Tag the release
-git tag -a v1.0.0 -m "VoiceKey 1.0.0 - Initial Release"
+git tag -a v1.0.0 -m "DoubleTapTalk 1.0.0 - Initial Release"
 git push origin v1.0.0
 
 # Or create draft release manually on GitHub
@@ -200,10 +200,10 @@ swift build -c release
 ./package-dmg.sh
 
 # Sign locally (development)
-codesign --force --deep --sign "-" VoiceKey.app
+codesign --force --deep --sign "-" DoubleTapTalk.app
 
 # Notarize (requires developer account)
-xcrun notarytool submit VoiceKey-1.0.0.dmg --apple-id your@email.com --team-id YOURTEAMID --password password --wait
+xcrun notarytool submit DoubleTapTalk-1.0.0.dmg --apple-id your@email.com --team-id YOURTEAMID --password password --wait
 
 # Create annotated tag
 git tag -a v1.0.1 -m "Bug fixes and improvements"
