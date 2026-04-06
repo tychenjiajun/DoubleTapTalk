@@ -10,23 +10,12 @@ final class TextInjectionService {
         logger.info("Injecting \(text.count) characters...")
         logger.debug("Text preview: \(text.prefix(50))\(text.count > 50 ? "..." : "")")
         
-        // Detect if target is a browser - use pasteboard for browsers
-        let appName = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
-        let isBrowser = appName.lowercased().contains(where: { name in
-            ["chrome", "safari", "firefox", "edge", "brave", "opera"].contains(name.lowercased())
-        })
-        
-        if isBrowser {
-            logger.info("Browser detected (\(appName)), using pasteboard method")
+        // Try direct CGEvent injection first
+        if !injectDirect(text) {
+            logger.warning("Direct injection failed, using pasteboard method as fallback")
             injectViaPasteboard(text)
         } else {
-            // For native apps, try direct first
-            if !injectDirect(text) {
-                logger.warning("Direct injection failed, falling back to pasteboard")
-                injectViaPasteboard(text)
-            } else {
-                logger.info("Direct injection successful")
-            }
+            logger.info("Direct injection successful")
         }
     }
     
