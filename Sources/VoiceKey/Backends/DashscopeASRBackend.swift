@@ -1,7 +1,7 @@
 import Foundation
 
-struct QwenASRBackend: ASRBackend {
-    let name = "Qwen3 ASR"
+struct DashscopeASRBackend: ASRBackend {
+    let name = "DashScope ASR"
     private let apiKey: String?
     private let apiURL: String
     private let logger = FileLogger.shared
@@ -12,17 +12,17 @@ struct QwenASRBackend: ASRBackend {
     }
     
     func transcribe(audioURL: URL, language: String?, model: String?) async throws -> ASRResult {
-        logger.info("Qwen3 ASR: Starting transcription")
+        logger.info("DashScope ASR: Starting transcription")
         logger.debug("API URL: \(apiURL)")
-        logger.debug("Model: \(model ?? "qwen3-asr-flash"), Language: \(language ?? "auto")")
+        logger.debug("Model: \(model ?? "dashscope3-asr-flash"), Language: \(language ?? "auto")")
         
         guard let apiKey = apiKey, !apiKey.isEmpty else {
-            logger.error("Qwen3 ASR: No API key configured")
+            logger.error("DashScope ASR: No API key configured")
             throw ASRError.noAPIKey
         }
         
         guard let url = URL(string: apiURL) else {
-            logger.error("Qwen3 ASR: Invalid API URL: \(apiURL)")
+            logger.error("DashScope ASR: Invalid API URL: \(apiURL)")
             throw ASRError.invalidURL
         }
         
@@ -34,9 +34,9 @@ struct QwenASRBackend: ASRBackend {
         
         logger.debug("Audio encoded (Base64 length: \(base64Audio.count) chars)")
         
-        // Build request body according to Qwen3 ASR API spec
+        // Build request body according to DashScope ASR API spec
         var requestBody: [String: Any] = [
-            "model": model ?? "qwen3-asr-flash",
+            "model": model ?? "dashscope3-asr-flash",
             "messages": [
                 [
                     "role": "user",
@@ -69,16 +69,16 @@ struct QwenASRBackend: ASRBackend {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = jsonData
         
-        logger.debug("Sending request to Qwen3 ASR API...")
+        logger.debug("Sending request to DashScope ASR API...")
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
-            logger.error("Qwen3 ASR: Invalid response type")
+            logger.error("DashScope ASR: Invalid response type")
             throw ASRError.invalidResponse
         }
         
-        logger.debug("Qwen3 ASR API response status: \(httpResponse.statusCode)")
+        logger.debug("DashScope ASR API response status: \(httpResponse.statusCode)")
         
         // Log raw response for debugging
         if let rawResponse = String(data: data, encoding: .utf8) {
@@ -87,13 +87,13 @@ struct QwenASRBackend: ASRBackend {
         
         guard httpResponse.statusCode == 200 else {
             let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-            logger.error("Qwen3 ASR API error (\(httpResponse.statusCode)): \(errorMessage)")
+            logger.error("DashScope ASR API error (\(httpResponse.statusCode)): \(errorMessage)")
             throw ASRError.serverError(httpResponse.statusCode, errorMessage)
         }
         
-        // Parse response - Qwen3 uses different structure than OpenAI
+        // Parse response - DashScope uses different structure than OpenAI
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            logger.error("Qwen3 ASR: Failed to parse response JSON")
+            logger.error("DashScope ASR: Failed to parse response JSON")
             throw ASRError.invalidResponse
         }
         
@@ -104,7 +104,7 @@ struct QwenASRBackend: ASRBackend {
               let message = firstChoice["message"] as? [String: Any],
               let content = message["content"] as? String,
               !content.isEmpty else {
-            logger.error("Qwen3 ASR: No transcription text found in response")
+            logger.error("DashScope ASR: No transcription text found in response")
             logger.error("Full JSON keys: \(json.keys.joined(separator: ", "))")
             throw ASRError.transcriptionFailed("Empty or invalid response from API")
         }
@@ -116,7 +116,7 @@ struct QwenASRBackend: ASRBackend {
             language = lang
         }
         
-        logger.info("Qwen3 ASR: Transcription successful (\(content.count) chars)")
+        logger.info("DashScope ASR: Transcription successful (\(content.count) chars)")
         return ASRResult(
             text: content,
             language: language,

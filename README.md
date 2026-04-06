@@ -32,7 +32,7 @@ DoubleTapTalk is a lightweight macOS menu-bar application that enables hands-fre
 Choose your preferred speech recognition service:
 - **OpenAI Whisper** (cloud) - High accuracy, requires API key
 - **Groq** (cloud) - Fast inference on edge hardware
-- **Qwen3 ASR Flash** (cloud) - Alibaba's advanced model, excellent for Chinese
+- **DashScope ASR Flash** (cloud) - Alibaba's advanced model, excellent for Chinese
 - **Local whisper.cpp** (offline) - Free, private, self-hosted server required
 
 #### AI Text Polishing (Optional)
@@ -100,10 +100,10 @@ open DoubleTapTalk.app
 ### ⚙️ Configuration
 
 #### ASR Settings
-- **Backend Type**: OpenAI / Groq / Qwen3 / Local
+- **Backend Type**: OpenAI / Groq / DashScope / Local
 - **API Key**: Stored in Keychain (com.jiajun.doubletaptalk.app)
 - **Language**: auto / zh-CN / en / +100 more
-- **Model**: whisper-1 / whisper-large-v3 / qwen3-asr-flash
+- **Model**: whisper-1 / whisper-large-v3 / dashscope-asr-flash
 
 #### AI Polishing Settings (Optional)
 - **Enable Polishing**: Toggle on/off

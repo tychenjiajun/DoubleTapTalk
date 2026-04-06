@@ -32,7 +32,7 @@ DoubleTapTalk 是一款轻量级 macOS 菜单栏应用，让您在任何活跃�
 选择您偏好的语音识别服务：
 - **OpenAI Whisper**（云端）- 高精度，需要 API 密钥
 - **Groq**（云端）- 边缘硬件上的快速推理
-- **Qwen3 ASR Flash**（云端）- 阿里云高级模型，中文效果极佳
+- **DashScope ASR Flash**（云端）- DashScope 高级模型，中文效果极佳
 - **本地 whisper.cpp**（离线）- 免费、隐私友好，需自托管服务器
 
 #### AI 文本优化（可选）
@@ -100,10 +100,10 @@ open DoubleTapTalk.app
 ### ⚙️ 配置说明
 
 #### ASR 设置
-- **后端类型**: OpenAI / Groq / Qwen3 / 本地
+- **后端类型**: OpenAI / Groq / DashScope / 本地
 - **API 密钥**: 存储在 Keychain（com.jiajun.doubletaptalk.app）
 - **语言**: 自动 / zh-CN / en / 还有 100+ 种
-- **模型**: whisper-1 / whisper-large-v3 / qwen3-asr-flash
+- **模型**: whisper-1 / whisper-large-v3 / dashscope-asr-flash
 
 #### AI 优化设置（可选）
 - **启用优化**: 开关选项

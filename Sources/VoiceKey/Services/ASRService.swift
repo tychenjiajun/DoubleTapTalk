@@ -16,8 +16,8 @@ final class ASRService {
             currentBackend = OpenAIWhisperBackend(apiKey: settings.apiKey, apiURL: settings.apiURL)
         case .groq:
             currentBackend = GroqBackend(apiKey: settings.apiKey, apiURL: settings.apiURL)
-        case .qwen:
-            currentBackend = QwenASRBackend(apiKey: settings.apiKey, apiURL: settings.apiURL)
+        case .dashscope:
+            currentBackend = DashscopeASRBackend(apiKey: settings.apiKey, apiURL: settings.apiURL)
         case .local:
             currentBackend = LocalWhisperBackend(apiURL: settings.apiURL)
         }

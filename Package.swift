@@ -17,7 +17,7 @@ let package = Package(
                 "Backends/GroqBackend.swift",
                 "Backends/LocalWhisperBackend.swift",
                 "Backends/OpenAIWhisperBackend.swift",
-                "Backends/QwenASRBackend.swift",
+                "Backends/DashscopeASRBackend.swift",
                 "Models/ASRBackend.swift",
                 "Models/LLMProvider.swift",
                 "Models/Settings.swift",

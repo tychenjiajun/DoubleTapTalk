@@ -5,21 +5,21 @@ private let logger = FileLogger.shared
 enum ASRBackendType: String, CaseIterable, Codable {
     case openAI = "openai"
     case groq = "groq"
-    case qwen = "qwen"
+    case dashscope = "dashscope"
     case local = "local"
     
     var displayName: String {
         switch self {
         case .openAI: return "OpenAI Whisper"
         case .groq: return "Groq"
-        case .qwen: return "Qwen3 ASR"
+        case .dashscope: return "DashScope ASR"
         case .local: return "Local (whisper.cpp)"
         }
     }
     
     var requiresAPIKey: Bool {
         switch self {
-        case .openAI, .groq, .qwen: return true
+        case .openAI, .groq, .dashscope: return true
         case .local: return false
         }
     }
@@ -28,7 +28,7 @@ enum ASRBackendType: String, CaseIterable, Codable {
         switch self {
         case .openAI: return "https://api.openai.com/v1/audio/transcriptions"
         case .groq: return "https://api.groq.com/openai/v1/audio/transcriptions"
-        case .qwen: return "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+        case .dashscope: return "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
         case .local: return "http://localhost:8080/v1/audio/transcriptions"
         }
     }
@@ -178,8 +178,8 @@ final class DoubleTapTalkSettings: ObservableObject {
             self.model = defaults.string(forKey: Keys.model) ?? "whisper-1"
         } else if backend == .groq {
             self.model = defaults.string(forKey: Keys.model) ?? "whisper-large-v3-turbo"
-        } else if backend == .qwen {
-            self.model = defaults.string(forKey: Keys.model) ?? "qwen3-asr-flash"
+        } else if backend == .dashscope {
+            self.model = defaults.string(forKey: Keys.model) ?? "dashscope-asr-flash"
         } else {
             self.model = defaults.string(forKey: Keys.model) ?? "whisper.cpp"
         }
