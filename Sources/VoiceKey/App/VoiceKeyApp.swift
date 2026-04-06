@@ -49,7 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.startRecording()
         }
         statusBarController?.onStopRecording = { [weak self] in
-            self?.stopRecording()
+            self?.stopRecording(polish: false)
         }
         
         // Initialize hotkey service
@@ -57,8 +57,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyService?.onHotkeyPressed = { [weak self] in
             self?.startRecording()
         }
-        hotkeyService?.onHotkeyReleased = { [weak self] in
-            self?.stopRecording()
+        hotkeyService?.onHotkeyReleased = { [weak self] polish in
+            self?.stopRecording(polish: polish)
         }
         hotkeyService?.start()
         
@@ -115,7 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
-    private func stopRecording() {
+    private func stopRecording(polish: Bool = false) {
         guard let audioRecorder = audioRecorder else { return }
         
         let audioURL = audioRecorder.stopRecording()
@@ -131,7 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task {
             do {
                 logger.log("Transcribing audio from: \(url.path)")
-                let text = try await asrService?.transcribe(audioURL: url)
+                let text = try await asrService?.transcribe(audioURL: url, polish: polish)
                 logger.log("Transcription result: '\(text ?? "nil")'")
                 await MainActor.run {
                     if let text = text, !text.isEmpty {

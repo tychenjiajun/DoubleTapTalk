@@ -5,7 +5,7 @@ import ApplicationServices
 
 final class HotkeyService {
     var onHotkeyPressed: (() -> Void)?
-    var onHotkeyReleased: (() -> Void)?
+    var onHotkeyReleased: ((Bool) -> Void)?  // Bool indicates whether to polish text
     
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -85,24 +85,55 @@ final class HotkeyService {
     private func handleControlTap() {
         let now = Date()
         
-        // Check if this is a double tap
-        if let lastTap = lastTapTime,
-           now.timeIntervalSince(lastTap) < doubleTapThreshold {
-            // Double tap detected - toggle recording
-            logger.info("Double-tap Control detected!")
-            toggleRecording()
-            lastTapTime = nil
-        } else {
-            // First tap - wait for potential second tap
-            logger.debug("First Control tap detected, waiting for second...")
-            lastTapTime = now
-            
-            // After threshold, reset (single tap ignored)
-            DispatchQueue.main.asyncAfter(deadline: .now() + doubleTapThreshold) {
-                if self.lastTapTime != nil {
-                    self.logger.debug("Single tap timeout - ignored")
+        if isRecording {
+            // In recording state - handle stop
+            if let lastTap = lastTapTime, now.timeIntervalSince(lastTap) < doubleTapThreshold {
+                // Double tap detected while recording: stop with polish
+                logger.info("Double-tap Control detected while recording - stop with polish")
+                lastTapTime = nil
+                isRecording = false
+                DispatchQueue.main.async {
+                    self.onHotkeyReleased?(true)
                 }
-                self.lastTapTime = nil
+            } else {
+                // First tap while recording: wait for possible second tap
+                logger.debug("First Control tap detected while recording, waiting for second...")
+                lastTapTime = now
+                
+                // After threshold, treat as single tap (stop without polish)
+                DispatchQueue.main.asyncAfter(deadline: .now() + doubleTapThreshold) {
+                    if self.lastTapTime != nil {
+                        self.logger.info("Single Control tap detected - stop without polish")
+                        self.lastTapTime = nil
+                        self.isRecording = false
+                        DispatchQueue.main.async {
+                            self.onHotkeyReleased?(false)
+                        }
+                    }
+                }
+            }
+        } else {
+            // Not recording - handle start
+            if let lastTap = lastTapTime, now.timeIntervalSince(lastTap) < doubleTapThreshold {
+                // Double tap detected while not recording: start recording
+                logger.info("Double-tap Control detected - start recording")
+                lastTapTime = nil
+                isRecording = true
+                DispatchQueue.main.async {
+                    self.onHotkeyPressed?()
+                }
+            } else {
+                // First tap while not recording: wait for possible second tap
+                logger.debug("First Control tap detected, waiting for second...")
+                lastTapTime = now
+                
+                // After threshold, reset (single tap ignored)
+                DispatchQueue.main.asyncAfter(deadline: .now() + doubleTapThreshold) {
+                    if self.lastTapTime != nil {
+                        self.logger.debug("Single tap timeout - ignored")
+                    }
+                    self.lastTapTime = nil
+                }
             }
         }
     }
@@ -142,21 +173,6 @@ final class HotkeyService {
         }
         
         return false
-    }
-    
-    private func toggleRecording() {
-        isRecording.toggle()
-        let action = isRecording ? "START" : "STOP"
-        logger.info("Toggle recording: \(action)")
-        DispatchQueue.main.async {
-            if self.isRecording {
-                self.logger.debug("Calling onHotkeyPressed callback")
-                self.onHotkeyPressed?()
-            } else {
-                self.logger.debug("Calling onHotkeyReleased callback")
-                self.onHotkeyReleased?()
-            }
-        }
     }
     
     private func showPermissionsAlert() {

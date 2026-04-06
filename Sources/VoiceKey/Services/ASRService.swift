@@ -1,5 +1,12 @@
 import Foundation
 
+enum ASRError: Error {
+    case invalidURL
+    case transcriptionFailed(String)
+    case invalidResponse
+    case timeout
+}
+
 final class ASRService {
     private var currentBackend: ASRBackend?
     private let logger = FileLogger.shared
@@ -23,7 +30,7 @@ final class ASRService {
         }
     }
     
-    func transcribe(audioURL: URL) async throws -> String? {
+    func transcribe(audioURL: URL, polish: Bool) async throws -> String? {
         // Update backend in case settings changed
         updateBackend()
         
@@ -49,11 +56,11 @@ final class ASRService {
             var text = result.text
             logger.log("Got transcription: '\(text)'")
             
-            // Apply LLM polishing if enabled
-            if settings.llmEnabled && !text.isEmpty {
+            // Apply LLM polishing if requested and enabled
+            if polish && settings.llmEnabled && !text.isEmpty {
                 logger.info("Applying LLM polishing...")
                 let llmSettings = LLMSettings(
-                    enabled: settings.llmEnabled,
+                    enabled: true,
                     provider: settings.llmProvider,
                     apiKey: settings.llmAPIKey,
                     model: settings.llmModel,
@@ -62,12 +69,15 @@ final class ASRService {
                 )
                 
                 do {
-                    let polishedText = try await LLMService.shared.polish(text: text, settings: llmSettings)
+                    // Try polishing with 5-second timeout
+                    let polishedText = try await withTimeout(5.0) {
+                        try await LLMService.shared.polish(text: text, settings: llmSettings)
+                    }
                     logger.info("Polished result: '\(polishedText)'")
                     text = polishedText
                 } catch {
                     logger.error("LLM polishing failed: \(error). Using original text.")
-                    // Continue with original text even if polishing fails
+                    // Continue with original text
                 }
             }
             
@@ -76,5 +86,17 @@ final class ASRService {
             logger.log("Transcription error: \(error)")
             throw error
         }
+    }
+    
+    private func withTimeout<T>(_ seconds: TimeInterval, operation: @escaping () async throws -> T) async throws -> T {
+        let task = Task {
+            try await operation()
+        }
+        let timeoutTask = Task {
+            try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            task.cancel()
+            throw ASRError.timeout
+        }
+        return try await task.value
     }
 }
