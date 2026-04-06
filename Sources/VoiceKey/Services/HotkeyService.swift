@@ -1,6 +1,7 @@
 import Foundation
 import CoreGraphics
 import AppKit
+import ApplicationServices
 
 final class HotkeyService {
     var onHotkeyPressed: (() -> Void)?
@@ -18,34 +19,25 @@ final class HotkeyService {
     func start() {
         logger.info("Starting hotkey service (double-tap Control detection)...")
         
-        // First try to create a tap for modifier keys
-        let eventMask = (1 << CGEventType.flagsChanged.rawValue)
-        
-        guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
-            eventsOfInterest: CGEventMask(eventMask),
-            callback: { (proxy, type, event, refcon) -> Unmanaged<CGEvent>? in
-                guard let refcon = refcon else {
-                    return Unmanaged.passRetained(event)
-                }
-                let service = Unmanaged<HotkeyService>.fromOpaque(refcon).takeUnretainedValue()
-                return service.handleFlagsChangedEvent(proxy: proxy, type: type, event: event)
-            },
-            userInfo: Unmanaged.passUnretained(self).toOpaque()
-        ) else {
-            logger.error("Failed to create event tap. Please grant accessibility permissions in System Settings > Privacy & Security > Accessibility")
+        // Check accessibility permissions first
+        if !AXIsProcessTrusted() {
+            logger.error("Accessibility permissions NOT granted!")
+            logger.error("Please open System Settings → Privacy & Security → Accessibility")
+            logger.error("Then add VoiceKey to the allowed applications list")
+            showPermissionsAlert()
             return
         }
         
-        eventTap = tap
-        logger.debug("Event tap created successfully")
+        logger.debug("Accessibility permissions verified")
         
-        runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
-        logger.info("Hotkey service started - listening for double-tap Control")
+        // Try creating the tap with multiple approaches
+        guard createEventTap() else {
+            logger.error("Failed to create event tap even with permissions")
+            logger.error("Try: Quit VoiceKey → Reopen → Check Accessibility permissions again")
+            return
+        }
+        
+        logger.info("Hotkey service started successfully - double-tap Control to record")
     }
     
     func stop() {
@@ -115,6 +107,43 @@ final class HotkeyService {
         }
     }
     
+    private func createEventTap() -> Bool {
+        let eventMask = (1 << CGEventType.flagsChanged.rawValue)
+        
+        // Try multiple tap configurations
+        let configs: [(tap: CGEventTapLocation, place: CGEventTapPlacement, options: CGEventTapOptions)] = [
+            (.cgSessionEventTap, .headInsertEventTap, .defaultTap),
+            (.cghidEventTap, .tailAppendEventTap, .listenOnly),
+        ]
+        
+        for config in configs {
+            if let tap = CGEvent.tapCreate(
+                tap: config.tap,
+                place: config.place,
+                options: config.options,
+                eventsOfInterest: CGEventMask(eventMask),
+                callback: { (proxy, type, event, refcon) -> Unmanaged<CGEvent>? in
+                    guard let refcon = refcon else {
+                        return Unmanaged.passRetained(event)
+                    }
+                    let service = Unmanaged<HotkeyService>.fromOpaque(refcon).takeUnretainedValue()
+                    return service.handleFlagsChangedEvent(proxy: proxy, type: type, event: event)
+                },
+                userInfo: Unmanaged.passUnretained(self).toOpaque()
+            ) {
+                eventTap = tap
+                logger.debug("Event tap created with config: \(config.tap.rawValue)")
+                
+                runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+                CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
+                CGEvent.tapEnable(tap: tap, enable: true)
+                return true
+            }
+        }
+        
+        return false
+    }
+    
     private func toggleRecording() {
         isRecording.toggle()
         let action = isRecording ? "START" : "STOP"
@@ -126,6 +155,22 @@ final class HotkeyService {
             } else {
                 self.logger.debug("Calling onHotkeyReleased callback")
                 self.onHotkeyReleased?()
+            }
+        }
+    }
+    
+    private func showPermissionsAlert() {
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.messageText = "Accessibility Permission Required"
+            alert.informativeText = "VoiceKey needs accessibility permission to detect hotkeys.\n\nClick 'Open Privacy Settings' to enable it."
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Open Privacy Settings")
+            alert.addButton(withTitle: "OK")
+            
+            let response = alert.runModal()
+            if response == .alertFirstButtonReturn {
+                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
             }
         }
     }

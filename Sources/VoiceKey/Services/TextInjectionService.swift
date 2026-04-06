@@ -10,13 +10,23 @@ final class TextInjectionService {
         logger.info("Injecting \(text.count) characters...")
         logger.debug("Text preview: \(text.prefix(50))\(text.count > 50 ? "..." : "")")
         
-        // First try direct CGEvent injection
-        if !injectDirect(text) {
-            logger.warning("Direct injection failed, trying pasteboard method")
-            // Fallback to pasteboard method
+        // Detect if target is a browser - use pasteboard for browsers
+        let appName = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
+        let isBrowser = appName.lowercased().contains(where: { name in
+            ["chrome", "safari", "firefox", "edge", "brave", "opera"].contains(name.lowercased())
+        })
+        
+        if isBrowser {
+            logger.info("Browser detected (\(appName)), using pasteboard method")
             injectViaPasteboard(text)
         } else {
-            logger.info("Direct injection successful")
+            // For native apps, try direct first
+            if !injectDirect(text) {
+                logger.warning("Direct injection failed, falling back to pasteboard")
+                injectViaPasteboard(text)
+            } else {
+                logger.info("Direct injection successful")
+            }
         }
     }
     
@@ -77,56 +87,49 @@ final class TextInjectionService {
         let previousContents = pasteboard.string(forType: .string)
         logger.debug("Previous pasteboard contents: \(previousContents?.prefix(30) ?? "nil")")
         
+        // Ensure focus on text field with small delay
+        Thread.sleep(forTimeInterval: 0.1)
+        
         // Set new text
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
         logger.debug("Text copied to pasteboard")
         
-        // Simulate Cmd+V
+        // Small delay before simulating Cmd+V
+        Thread.sleep(forTimeInterval: 0.05)
+        
+        // Simulate Cmd+V with proper event sequence
         let source = CGEventSource(stateID: .hidSystemState)
         
         // Key code for V is 9
         let vKeyCode: CGKeyCode = 9
         
-        // Cmd down
-        guard let cmdDown = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Command), keyDown: true) else {
-            logger.error("Failed to create Cmd key down event")
+        // Down both Command and V together
+        guard let cmdVDown = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: true) else {
+            logger.error("Failed to create Cmd+V down event")
             return
         }
-        cmdDown.flags = .maskCommand
-        cmdDown.post(tap: .cghidEventTap)
+        cmdVDown.flags = [.maskCommand]
+        cmdVDown.post(tap: .cghidEventTap)
         
-        // V down
-        guard let vDown = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: true) else {
-            logger.error("Failed to create V key down event")
+        // Up both Command and V together  
+        guard let cmdVUp = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: false) else {
+            logger.error("Failed to create Cmd+V up event")
             return
         }
-        vDown.flags = .maskCommand
-        vDown.post(tap: .cghidEventTap)
-        
-        // V up
-        guard let vUp = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: false) else {
-            logger.error("Failed to create V key up event")
-            return
-        }
-        vUp.flags = .maskCommand
-        vUp.post(tap: .cghidEventTap)
-        
-        // Cmd up
-        guard let cmdUp = CGEvent(keyboardEventSource: source, virtualKey: CGKeyCode(kVK_Command), keyDown: false) else {
-            logger.error("Failed to create Cmd key up event")
-            return
-        }
-        cmdUp.post(tap: .cghidEventTap)
+        cmdVUp.flags = [.maskCommand]
+        cmdVUp.post(tap: .cghidEventTap)
         
         logger.info("Pasteboard injection completed")
         
         // Restore pasteboard after a delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            self.logger.debug("Restoring pasteboard")
             if let previous = previousContents {
                 pasteboard.clearContents()
                 pasteboard.setString(previous, forType: .string)
-                self.logger.debug("Pasteboard restored")
+            } else {
+                pasteboard.clearContents()
             }
         }
     }

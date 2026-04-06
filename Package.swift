@@ -1,0 +1,43 @@
+// swift-tools-version:5.9
+import PackageDescription
+
+let package = Package(
+    name: "VoiceKey",
+    platforms: [.macOS(.v13)],
+    products: [
+        .executable(name: "VoiceKey", targets: ["VoiceKey"])
+    ],
+    dependencies: [],
+    targets: [
+        .executableTarget(
+            name: "VoiceKey",
+            path: "Sources/VoiceKey",
+            sources: [
+                "App/VoiceKeyApp.swift",
+                "Backends/GroqBackend.swift",
+                "Backends/LocalWhisperBackend.swift",
+                "Backends/OpenAIWhisperBackend.swift",
+                "Backends/QwenASRBackend.swift",
+                "Models/ASRBackend.swift",
+                "Models/Settings.swift",
+                "Services/ASRService.swift",
+                "Services/AudioRecorder.swift",
+                "Services/HotkeyService.swift",
+                "Services/KeychainService.swift",
+                "Services/TextInjectionService.swift",
+                "Views/SettingsView.swift",
+                "Views/SettingsWindowController.swift",
+                "Views/StatusBarController.swift"
+            ],
+            resources: [.process("../Resources")],
+            linkerSettings: [
+                .linkedFramework("AppKit"),
+                .linkedFramework("AVFoundation"),
+                .linkedFramework("Carbon"),
+                .linkedFramework("CoreGraphics"),
+                .linkedFramework("Security"),
+                .linkedFramework("ServiceManagement")
+            ]
+        )
+    ]
+)

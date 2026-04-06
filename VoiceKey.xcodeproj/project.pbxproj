@@ -1,0 +1,12 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 54;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AABBCCDD0000000000000001 /* VoiceKeyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABBCCDD0000000000000101 /* VoiceKeyApp.swift */; };
+/* End PBXBuildFile section */
+
