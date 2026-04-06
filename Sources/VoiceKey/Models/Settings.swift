@@ -137,33 +137,12 @@ final class VoiceKeySettings: ObservableObject {
     }
     
     var llmSystemPrompt: String {
-        get {
-            return defaults.string(forKey: Keys.llmSystemPrompt) ?? LLMSettings.default.systemPrompt
-        }
-        set {
-            defaults.set(newValue, forKey: Keys.llmSystemPrompt)
-        }
+        get { defaults.string(forKey: Keys.llmSystemPrompt) ?? LLMSettings.default.systemPrompt }
+        set { defaults.set(newValue, forKey: Keys.llmSystemPrompt) }
     }
     
-    var llmBaseURL: String? {
-        get {
-            return defaults.string(forKey: Keys.llmBaseURL)
-        }
-        set {
-            defaults.set(newValue, forKey: Keys.llmBaseURL)
-            logger.info("Settings: LLM base URL \(newValue != nil ? "saved: \(newValue!)" : "cleared")")
-        }
-    }
-    
-    var llmTimeout: Double {
-        get {
-            return defaults.double(forKey: Keys.llmTimeout)
-        }
-        set {
-            defaults.set(newValue, forKey: Keys.llmTimeout)
-            logger.info("Settings: LLM timeout set to \(newValue)s")
-        }
-    }
+    @Published var llmBaseURL: String? = nil
+    @Published var llmTimeout: Double = 5.0
     
     var llmAPIKey: String? {
         get {
@@ -223,9 +202,5 @@ final class VoiceKeySettings: ObservableObject {
         llmProvider = .openai
         llmModel = "gpt-4o-mini"
         llmTemperature = 0.3
-        llmSystemPrompt = LLMSettings.default.systemPrompt
-        llmBaseURL = nil
-        llmTimeout = 5.0
-        llmAPIKey = nil
     }
 }

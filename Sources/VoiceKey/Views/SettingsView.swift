@@ -110,9 +110,8 @@ struct SettingsView: View {
                             }
                         }
                         .pickerStyle(.radioGroup)
-                        .onChange(of: settings.llmProvider) { newValue in
+                        .onChange(of: settings.llmProvider) { [settings] newValue in
                             settings.llmModel = newValue.defaultModel
-                            llmApiKeyInput = settings.llmAPIKey ?? ""
                         }
                         
                         // API Key input
@@ -216,6 +215,9 @@ struct SettingsView: View {
         }
         .onChange(of: settings.llmBaseURL) { newValue in
             llmBaseURLInput = newValue ?? ""
+        }
+        .onChange(of: settings.llmAPIKey) { newValue in
+            llmApiKeyInput = newValue ?? ""
         }
     }
 }
