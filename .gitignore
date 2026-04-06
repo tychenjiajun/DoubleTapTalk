@@ -1,12 +1,19 @@
-.DS_Store
+# Build outputs
+.build/
 build/
 DerivedData/
 *.xcuserstate
 *.xcuserdatad
 xcuserdata/
+*.dmg
+VoiceKey.app
+
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-VoiceKey-*.dmg
+
+# macOS
+.DS_Store
