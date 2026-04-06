@@ -1,0 +1,12 @@
+.DS_Store
+build/
+DerivedData/
+*.xcuserstate
+*.xcuserdatad
+xcuserdata/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+VoiceKey-*.dmg
