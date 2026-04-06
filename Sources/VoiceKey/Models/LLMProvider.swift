@@ -38,14 +38,7 @@ struct LLMSettings: Codable {
     var temperature: Double
     var systemPrompt: String
     var baseURL: String?  // Optional custom base URL for OpenAI-compatible APIs
-    
-    static let `default` = LLMSettings(
-        enabled: false,
-        provider: .openai,
-        apiKey: nil,
-        model: "gpt-4o-mini",
-        temperature: 0.3,
-        systemPrompt: """
+    var timeout: Double   // Timeout in seconds for polishing operation
     
     static let `default` = LLMSettings(
         enabled: false,
@@ -62,6 +55,8 @@ struct LLMSettings: Codable {
         - Return only the polished text without any explanations
         
         Do not add or remove content from the original message.
-        """
+        """,
+        baseURL: nil,
+        timeout: 5.0
     )
 }

@@ -159,6 +159,17 @@ struct SettingsView: View {
                             }
                         }
                         
+                        // Timeout setting
+                        HStack {
+                            Text("Polishing Timeout:")
+                            Spacer()
+                            Text(String(format: "%.1fs", settings.llmTimeout))
+                                .monospacedDigit()
+                                .foregroundColor(.secondary)
+                            Slider(value: $settings.llmTimeout, in: 1.0...30.0, step: 1.0)
+                                .frame(width: 150)
+                        }
+                        
                         // Model name
                         TextField("Model Name", text: $settings.llmModel)
                             .textFieldStyle(.roundedBorder)

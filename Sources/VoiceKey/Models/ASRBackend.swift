@@ -20,6 +20,7 @@ enum ASRError: LocalizedError {
     case serverError(Int, String)
     case audioFileError
     case transcriptionFailed(String)
+    case timeout
     
     var errorDescription: String? {
         switch self {
@@ -37,6 +38,8 @@ enum ASRError: LocalizedError {
             return "Failed to read audio file"
         case .transcriptionFailed(let message):
             return "Transcription failed: \(message)"
+        case .timeout:
+            return "Operation timed out"
         }
     }
 }

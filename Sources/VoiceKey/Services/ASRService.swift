@@ -1,12 +1,5 @@
 import Foundation
 
-enum ASRError: Error {
-    case invalidURL
-    case transcriptionFailed(String)
-    case invalidResponse
-    case timeout
-}
-
 final class ASRService {
     private var currentBackend: ASRBackend?
     private let logger = FileLogger.shared
@@ -66,12 +59,13 @@ final class ASRService {
                     model: settings.llmModel,
                     temperature: settings.llmTemperature,
                     systemPrompt: settings.llmSystemPrompt,
-                    baseURL: settings.llmBaseURL
+                    baseURL: settings.llmBaseURL,
+                    timeout: settings.llmTimeout
                 )
                 
                 do {
-                    // Try polishing with 5-second timeout
-                    let polishedText = try await withTimeout(5.0) {
+                    // Try polishing with configurable timeout
+                    let polishedText = try await withTimeout(settings.llmTimeout) {
                         try await LLMService.shared.polish(text: text, settings: llmSettings)
                     }
                     logger.info("Polished result: '\(polishedText)'")

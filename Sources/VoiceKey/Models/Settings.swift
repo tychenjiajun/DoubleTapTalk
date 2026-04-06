@@ -52,6 +52,7 @@ final class VoiceKeySettings: ObservableObject {
         static let llmTemperature = "LLMTemperature"
         static let llmSystemPrompt = "LLMSystemPrompt"
         static let llmBaseURL = "LLMBASEURL"
+        static let llmTimeout = "LLMTimeout"
     }
     
     @Published var backendType: ASRBackendType {
@@ -135,19 +136,32 @@ final class VoiceKeySettings: ObservableObject {
         }
     }
     
-    @Published var llmSystemPrompt: String {
-        didSet {
-            defaults.set(llmSystemPrompt, forKey: Keys.llmSystemPrompt)
+    var llmSystemPrompt: String {
+        get {
+            return defaults.string(forKey: Keys.llmSystemPrompt) ?? LLMSettings.default.systemPrompt
+        }
+        set {
+            defaults.set(newValue, forKey: Keys.llmSystemPrompt)
         }
     }
     
-    @Published var llmBaseURL: String? {
+    var llmBaseURL: String? {
         get {
             return defaults.string(forKey: Keys.llmBaseURL)
         }
         set {
             defaults.set(newValue, forKey: Keys.llmBaseURL)
             logger.info("Settings: LLM base URL \(newValue != nil ? "saved: \(newValue!)" : "cleared")")
+        }
+    }
+    
+    var llmTimeout: Double {
+        get {
+            return defaults.double(forKey: Keys.llmTimeout)
+        }
+        set {
+            defaults.set(newValue, forKey: Keys.llmTimeout)
+            logger.info("Settings: LLM timeout set to \(newValue)s")
         }
     }
     
@@ -193,6 +207,8 @@ final class VoiceKeySettings: ObservableObject {
         self.llmTemperature = tempValue == 0.0 ? 0.3 : tempValue
         self.llmSystemPrompt = defaults.string(forKey: Keys.llmSystemPrompt) ?? LLMSettings.default.systemPrompt
         self.llmBaseURL = defaults.string(forKey: Keys.llmBaseURL)
+        let timeoutValue = defaults.double(forKey: Keys.llmTimeout)
+        self.llmTimeout = timeoutValue > 0.0 ? timeoutValue : 5.0
     }
     
     func reset() {
@@ -209,6 +225,7 @@ final class VoiceKeySettings: ObservableObject {
         llmTemperature = 0.3
         llmSystemPrompt = LLMSettings.default.systemPrompt
         llmBaseURL = nil
+        llmTimeout = 5.0
         llmAPIKey = nil
     }
 }
