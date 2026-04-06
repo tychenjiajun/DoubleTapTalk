@@ -103,7 +103,7 @@ open DoubleTapTalk.app
 - **后端类型**: OpenAI / Groq / DashScope / 本地
 - **API 密钥**: 存储在 Keychain（com.jiajun.doubletaptalk.app）
 - **语言**: 自动 / zh-CN / en / 还有 100+ 种
-- **模型**: whisper-1 / whisper-large-v3 / dashscope-asr-flash
+- **模型**: whisper-1 / whisper-large-v3 / qwen3-asr-flash
 
 #### AI 优化设置（可选）
 - **启用优化**: 开关选项

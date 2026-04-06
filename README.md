@@ -103,7 +103,7 @@ open DoubleTapTalk.app
 - **Backend Type**: OpenAI / Groq / DashScope / Local
 - **API Key**: Stored in Keychain (com.jiajun.doubletaptalk.app)
 - **Language**: auto / zh-CN / en / +100 more
-- **Model**: whisper-1 / whisper-large-v3 / dashscope-asr-flash
+- **Model**: whisper-1 / whisper-large-v3 / qwen3-asr-flash
 
 #### AI Polishing Settings (Optional)
 - **Enable Polishing**: Toggle on/off

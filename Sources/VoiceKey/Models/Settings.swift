@@ -179,7 +179,7 @@ final class DoubleTapTalkSettings: ObservableObject {
         } else if backend == .groq {
             self.model = defaults.string(forKey: Keys.model) ?? "whisper-large-v3-turbo"
         } else if backend == .dashscope {
-            self.model = defaults.string(forKey: Keys.model) ?? "dashscope-asr-flash"
+            self.model = defaults.string(forKey: Keys.model) ?? "qwen3-asr-flash"
         } else {
             self.model = defaults.string(forKey: Keys.model) ?? "whisper.cpp"
         }
