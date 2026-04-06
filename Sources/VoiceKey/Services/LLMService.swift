@@ -101,15 +101,51 @@ final class LLMService {
             throw ASRError.transcriptionFailed(errorText)
         }
         
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let choices = json["choices"] as? [[String: Any]],
-              let firstChoice = choices.first,
-              let message = firstChoice["message"] as? [String: Any],
-              let content = message["content"] as? String else {
+        // Log full response for debugging
+        if let responseBody = String(data: data, encoding: .utf8) {
+            logger.debug("Full OpenAI response: \(responseBody.prefix(500))\(responseBody.count > 500 ? "..." : "")")
+        }
+        
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            logger.error("Invalid JSON response")
             throw ASRError.invalidResponse
         }
         
-        return content.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Try multiple parsing strategies for different API formats
+        var content: String?
+        
+        // Strategy 1: Standard OpenAI format
+        if let choices = json["choices"] as? [[String: Any]],
+           let firstChoice = choices.first,
+           let message = firstChoice["message"] as? [String: Any],
+           let text = message["content"] as? String {
+            content = text
+            logger.debug("Parsed using standard OpenAI format")
+        }
+        // Strategy 2: ModelScope/Tongyi format (text in root or alternatives)
+        else if let text = json["output"] as? [String: Any],
+                let choices = text["choices"] as? [[String: Any]],
+                let firstChoice = choices.first,
+                let textValue = firstChoice["text"] as? String {
+            content = textValue
+            logger.debug("Parsed using ModelScope output.choices[].text format")
+        }
+        else if let text = json["text"] as? String {
+            content = text
+            logger.debug("Parsed using root.text format")
+        }
+        // Strategy 3: Alternative common formats
+        else if let reply = json["reply"] as? String {
+            content = reply
+            logger.debug("Parsed using root.reply format")
+        }
+        else {
+            logger.error("Unknown response format. Available keys: \(json.keys)")
+            logger.error("Raw JSON: \(json)")
+            throw ASRError.invalidResponse
+        }
+        
+        return content!.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
     private func callAnthropic(

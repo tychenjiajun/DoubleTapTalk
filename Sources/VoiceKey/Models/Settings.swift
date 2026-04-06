@@ -141,8 +141,19 @@ final class VoiceKeySettings: ObservableObject {
         set { defaults.set(newValue, forKey: Keys.llmSystemPrompt) }
     }
     
-    @Published var llmBaseURL: String? = nil
-    @Published var llmTimeout: Double = 5.0
+    @Published var llmBaseURL: String? = nil {
+        didSet {
+            defaults.set(llmBaseURL, forKey: Keys.llmBaseURL)
+            logger.info("Settings: LLM Base URL \(llmBaseURL != nil ? "saved" : "cleared")")
+        }
+    }
+    
+    @Published var llmTimeout: Double = 5.0 {
+        didSet {
+            defaults.set(llmTimeout, forKey: Keys.llmTimeout)
+            logger.info("Settings: LLM Timeout \(llmTimeout)s saved")
+        }
+    }
     
     var llmAPIKey: String? {
         get {
