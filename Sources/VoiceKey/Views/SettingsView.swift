@@ -82,7 +82,7 @@ struct SettingsView: View {
             }
             
             Section {
-                Text("Hold Right Option key to record audio. Release to transcribe and type the result into the frontmost app.")
+                Text("Double-click Control key to start recording. Single-click to stop without polish, double-click to stop with AI polish.")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 

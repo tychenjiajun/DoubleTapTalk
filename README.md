@@ -4,7 +4,7 @@
 
 **macOS Speech-to-Text Utility | macOS 语音转文字助手**
 
-Push-to-talk app for quick transcription and text input in any application
+Double-tap hotkey activation for quick transcription and text input in any application
 
 [中文版本](README_zh-CN.md)
 
@@ -14,7 +14,7 @@ Push-to-talk app for quick transcription and text input in any application
 
 ## Overview
 
-DoubleTapTalk is a lightweight macOS menu-bar application that enables hands-free speech-to-text input into any active application. Simply press and hold a hotkey, speak naturally, and your words will be automatically transcribed and typed where needed.
+DoubleTapTalk is a lightweight macOS menu-bar application that enables speech-to-text input via double-tap hotkey activation. Simply double-click the Control key to start recording, speak naturally, then click once (without polish) or twice (with AI polish) to stop and automatically insert text where needed.
 
 ### ✨ Features
 
