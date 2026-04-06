@@ -51,6 +51,7 @@ final class VoiceKeySettings: ObservableObject {
         static let llmModel = "LLMModel"
         static let llmTemperature = "LLMTemperature"
         static let llmSystemPrompt = "LLMSystemPrompt"
+        static let llmBaseURL = "LLMBASEURL"
     }
     
     @Published var backendType: ASRBackendType {
@@ -140,6 +141,16 @@ final class VoiceKeySettings: ObservableObject {
         }
     }
     
+    @Published var llmBaseURL: String? {
+        get {
+            return defaults.string(forKey: Keys.llmBaseURL)
+        }
+        set {
+            defaults.set(newValue, forKey: Keys.llmBaseURL)
+            logger.info("Settings: LLM base URL \(newValue != nil ? "saved: \(newValue!)" : "cleared")")
+        }
+    }
+    
     var llmAPIKey: String? {
         get {
             return defaults.string(forKey: "LLMAPIKey")
@@ -181,6 +192,7 @@ final class VoiceKeySettings: ObservableObject {
         let tempValue = defaults.double(forKey: Keys.llmTemperature)
         self.llmTemperature = tempValue == 0.0 ? 0.3 : tempValue
         self.llmSystemPrompt = defaults.string(forKey: Keys.llmSystemPrompt) ?? LLMSettings.default.systemPrompt
+        self.llmBaseURL = defaults.string(forKey: Keys.llmBaseURL)
     }
     
     func reset() {
@@ -196,6 +208,7 @@ final class VoiceKeySettings: ObservableObject {
         llmModel = "gpt-4o-mini"
         llmTemperature = 0.3
         llmSystemPrompt = LLMSettings.default.systemPrompt
+        llmBaseURL = nil
         llmAPIKey = nil
     }
 }

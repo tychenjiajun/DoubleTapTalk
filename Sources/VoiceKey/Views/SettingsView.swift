@@ -8,6 +8,7 @@ struct SettingsView: View {
     // LLM Polishing state
     @State private var llmApiKeyInput: String = ""
     @State private var showLLMApiKey: Bool = false
+    @State private var llmBaseURLInput: String = ""
     
     var body: some View {
         Form {
@@ -142,6 +143,22 @@ struct SettingsView: View {
                             }
                         }
                         
+                        // Custom API base URL for OpenAI-compatible APIs
+                        HStack {
+                            TextField("Custom API Base URL (optional)", text: $llmBaseURLInput)
+                                .textFieldStyle(.roundedBorder)
+                            Button("Save") {
+                                settings.llmBaseURL = llmBaseURLInput.isEmpty ? nil : llmBaseURLInput
+                            }
+                            if settings.llmBaseURL != nil {
+                                Button("Clear") {
+                                    settings.llmBaseURL = nil
+                                    llmBaseURLInput = ""
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                        }
+                        
                         // Model name
                         TextField("Model Name", text: $settings.llmModel)
                             .textFieldStyle(.roundedBorder)
@@ -184,6 +201,10 @@ struct SettingsView: View {
         .onAppear {
             apiKeyInput = settings.apiKey ?? ""
             llmApiKeyInput = settings.llmAPIKey ?? ""
+            llmBaseURLInput = settings.llmBaseURL ?? ""
+        }
+        .onChange(of: settings.llmBaseURL) { newValue in
+            llmBaseURLInput = newValue ?? ""
         }
     }
 }

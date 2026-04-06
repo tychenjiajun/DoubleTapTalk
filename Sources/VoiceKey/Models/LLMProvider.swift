@@ -37,6 +37,15 @@ struct LLMSettings: Codable {
     var model: String
     var temperature: Double
     var systemPrompt: String
+    var baseURL: String?  // Optional custom base URL for OpenAI-compatible APIs
+    
+    static let `default` = LLMSettings(
+        enabled: false,
+        provider: .openai,
+        apiKey: nil,
+        model: "gpt-4o-mini",
+        temperature: 0.3,
+        systemPrompt: """
     
     static let `default` = LLMSettings(
         enabled: false,

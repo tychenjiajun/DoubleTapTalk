@@ -31,7 +31,8 @@ final class LLMService {
             apiKey: apiKey,
             model: settings.model,
             systemPrompt: settings.systemPrompt,
-            userContent: text
+            userContent: text,
+            baseURL: settings.baseURL
         )
         
         logger.info("Polished text (first 100 chars): \(response.prefix(100))\(response.count > 100 ? "..." : "")")
@@ -43,11 +44,12 @@ final class LLMService {
         apiKey: String,
         model: String,
         systemPrompt: String,
-        userContent: String
+        userContent: String,
+        baseURL: String? = nil
     ) async throws -> String {
         switch provider {
         case .openai:
-            return try await callOpenAI(apiKey: apiKey, model: model, systemPrompt: systemPrompt, userContent: userContent)
+            return try await callOpenAI(apiKey: apiKey, model: model, systemPrompt: systemPrompt, userContent: userContent, baseURL: baseURL)
         case .anthropic:
             return try await callAnthropic(apiKey: apiKey, model: model, systemPrompt: systemPrompt, userContent: userContent)
         case .google:
@@ -59,10 +61,19 @@ final class LLMService {
         apiKey: String,
         model: String,
         systemPrompt: String,
-        userContent: String
+        userContent: String,
+        baseURL: String? = nil
     ) async throws -> String {
-        let urlStr = "https://api.openai.com/v1/chat/completions"
-        guard let url = URL(string: urlStr) else { throw URLError(.badURL) }
+        // Use custom base URL if provided, otherwise use default
+        let urlStr = baseURL?.trimmingCharacters(in: .whitespaces) != nil ? baseURL! : "https://api.openai.com/v1/chat/completions"
+        guard var urlComponents = URLComponents(string: urlStr) else { throw URLError(.badURL) }
+        
+        // Ensure endpoint exists in URL
+        if !urlComponents.path.hasSuffix("/chat/completions"), !urlComponents.path.isEmpty {
+            urlComponents.path.append("/chat/completions")
+        }
+        
+        guard let url = urlComponents.url else { throw URLError(.badURL) }
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"

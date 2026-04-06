@@ -65,7 +65,8 @@ final class ASRService {
                     apiKey: settings.llmAPIKey,
                     model: settings.llmModel,
                     temperature: settings.llmTemperature,
-                    systemPrompt: settings.llmSystemPrompt
+                    systemPrompt: settings.llmSystemPrompt,
+                    baseURL: settings.llmBaseURL
                 )
                 
                 do {
