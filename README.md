@@ -43,6 +43,22 @@ Improve transcribed text with LLM-powered refinement:
 - **Graceful fallback**: Falls back to original text if timeout/error occurs
 - **System prompt customization**: Tailor the polishing behavior
 
+#### 🎯 App-Specific Polish (Intelligent Context-Aware Polishing)
+Automatically adapt polishing style based on the target application:
+- **Terminal** (`iTerm2`, `Warp`, `Terminal`): Converts to shell commands, lowercase, expands shorthands
+- **Code Comment** (text areas in VSCode, Xcode): Concise technical comments, no markers
+- **Code Editor** (general code context): Preserves technical terms, commit-message style
+- **Chat/Messaging** (`Slack`, `Discord`, `WeChat`, `Telegram`): Conversational, casual tone
+- **Email Formal** (`Mail`, `Outlook`, `Gmail`): Professional tone, proper punctuation
+- **Search Query** (browser URL bar): Strips to keywords, no punctuation
+- **Trading Terminal** (`富途牛牛`, `同花顺`, `Schwab`): Order format, stock codes, bilingual support
+- **General** (all other apps): Clean, readable text with filler word removal
+
+**Requirements for full functionality**:
+- Accessibility permission to read existing text in fields
+- Window title access for Gmail/Compose detection
+- Terminal screen buffer for conversation context
+
 #### Developer Friendly
 - **Comprehensive logging**: Debug at `~/Library/Caches/DoubleTapTalk.log`
 - **Helper scripts**: `view-logs.sh`, `check-polish-logs.sh`, `test-injection.sh`

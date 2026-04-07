@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 final class ASRService {
     private var currentBackend: ASRBackend?
@@ -52,6 +53,8 @@ final class ASRService {
             // Apply LLM polishing if requested and enabled
             if polish && settings.llmEnabled && !text.isEmpty {
                 logger.info("Applying LLM polishing...")
+                
+                // Build LLMSettings from global settings
                 let llmSettings = LLMSettings(
                     enabled: true,
                     provider: settings.llmProvider,
@@ -60,13 +63,52 @@ final class ASRService {
                     temperature: settings.llmTemperature,
                     systemPrompt: settings.llmSystemPrompt,
                     baseURL: settings.llmBaseURL,
-                    timeout: settings.llmTimeout
+                    timeout: settings.llmTimeout,
+                    pinnedProfile: settings.pinnedPolishProfile,
+                    useAppSpecificPolish: settings.useAppSpecificPolish
+                )
+                
+                // Get user locale with region for better localization
+                let localeIdentifier = Locale.current.identifier  // e.g., "en_US", "zh_CN"
+                
+                // Capture context before calling LLM service
+                let targetApp = NSWorkspace.shared.frontmostApplication ?? NSRunningApplication.current
+                
+                // Get existing text and focused element info via Accessibility API (if permission granted)
+                var existingText: String?
+                var conversationHint: String?
+                var focusedElementInfo: FocusedElementInfo?
+                
+                if AccessibilityService.shared.hasAccessibilityPermission() {
+                    // Capture focused element info once and reuse
+                    focusedElementInfo = AccessibilityService.shared.captureFocusedElementInfoDetailed(from: targetApp)
+                    existingText = focusedElementInfo?.value
+                    
+                    // For terminals, also get screen buffer as conversation hint
+                    let tempContext = AppContext(app: targetApp, focusedElementInfo: focusedElementInfo)
+                    if tempContext.isTerminal {
+                        conversationHint = AccessibilityService.shared.getTerminalContext(from: targetApp)
+                    }
+                } else {
+                    logger.warning("Accessibility permission not granted — context reading disabled")
+                }
+                
+                let appContext = AppContext(
+                    app: targetApp,
+                    focusedElementInfo: focusedElementInfo
+                )
+                
+                let polishContext = PolishContext(
+                    targetApp: appContext,
+                    existingText: existingText,
+                    conversationHint: conversationHint,
+                    userLocale: localeIdentifier
                 )
                 
                 do {
                     // Try polishing with configurable timeout
                     let polishedText = try await withTimeout(settings.llmTimeout) {
-                        try await LLMService.shared.polish(text: text, settings: llmSettings)
+                        try await LLMService.shared.polish(text: text, settings: llmSettings, context: polishContext)
                     }
                     logger.info("Polished result: '\(polishedText)'")
                     text = polishedText
@@ -87,7 +129,7 @@ final class ASRService {
         let task = Task {
             try await operation()
         }
-        let timeoutTask = Task {
+        _ = Task {
             try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
             task.cancel()
             throw ASRError.timeout

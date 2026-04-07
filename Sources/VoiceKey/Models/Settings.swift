@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 private let logger = FileLogger.shared
 
@@ -53,6 +54,8 @@ final class DoubleTapTalkSettings: ObservableObject {
         static let llmSystemPrompt = "LLMSystemPrompt"
         static let llmBaseURL = "LLMBASEURL"
         static let llmTimeout = "LLMTimeout"
+        static let useAppSpecificPolish = "UseAppSpecificPolish"
+        static let pinnedPolishProfile = "PinnedPolishProfile"
     }
     
     @Published var backendType: ASRBackendType {
@@ -165,6 +168,23 @@ final class DoubleTapTalkSettings: ObservableObject {
         }
     }
     
+    @Published var useAppSpecificPolish: Bool {
+        didSet {
+            defaults.set(useAppSpecificPolish, forKey: Keys.useAppSpecificPolish)
+            logger.info("Settings: App-specific polish \(useAppSpecificPolish ? "enabled" : "disabled")")
+        }
+    }
+    
+    var pinnedPolishProfile: PolishProfile? {
+        get {
+            guard let rawValue = defaults.string(forKey: Keys.pinnedPolishProfile) else { return nil }
+            return PolishProfile(rawValue: rawValue)
+        }
+        set {
+            defaults.set(newValue?.rawValue, forKey: Keys.pinnedPolishProfile)
+        }
+    }
+    
     private init() {
         // Load saved settings or use defaults
         let savedBackend = defaults.string(forKey: Keys.backendType) ?? ASRBackendType.openAI.rawValue
@@ -186,6 +206,9 @@ final class DoubleTapTalkSettings: ObservableObject {
         
         self.useLocalServer = defaults.bool(forKey: Keys.useLocalServer)
         
+        // Load app-specific polish setting (must load before other LLM settings that may reference it)
+        self.useAppSpecificPolish = defaults.bool(forKey: Keys.useAppSpecificPolish)
+        
         // Load LLM polishing settings
         let llmEnabledValue = defaults.bool(forKey: Keys.llmEnabled)
         self.llmEnabled = llmEnabledValue
@@ -195,10 +218,10 @@ final class DoubleTapTalkSettings: ObservableObject {
         self.llmModel = defaults.string(forKey: Keys.llmModel) ?? "gpt-4o-mini"
         let tempValue = defaults.double(forKey: Keys.llmTemperature)
         self.llmTemperature = tempValue == 0.0 ? 0.3 : tempValue
-        self.llmSystemPrompt = defaults.string(forKey: Keys.llmSystemPrompt) ?? LLMSettings.default.systemPrompt
         self.llmBaseURL = defaults.string(forKey: Keys.llmBaseURL)
         let timeoutValue = defaults.double(forKey: Keys.llmTimeout)
         self.llmTimeout = timeoutValue > 0.0 ? timeoutValue : 5.0
+        self.llmSystemPrompt = defaults.string(forKey: Keys.llmSystemPrompt) ?? LLMSettings.default.systemPrompt
     }
     
     func reset() {
@@ -213,5 +236,6 @@ final class DoubleTapTalkSettings: ObservableObject {
         llmProvider = .openai
         llmModel = "gpt-4o-mini"
         llmTemperature = 0.3
+        useAppSpecificPolish = true  // Default to enabled
     }
 }

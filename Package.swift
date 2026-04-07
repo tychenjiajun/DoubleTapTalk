@@ -20,7 +20,9 @@ let package = Package(
                 "Backends/DashscopeASRBackend.swift",
                 "Models/ASRBackend.swift",
                 "Models/LLMProvider.swift",
+                "Models/PolishModels.swift",
                 "Models/Settings.swift",
+                "Services/AccessibilityService.swift",
                 "Services/ASRService.swift",
                 "Services/AudioRecorder.swift",
                 "Services/HotkeyService.swift",
@@ -31,7 +33,7 @@ let package = Package(
                 "Views/SettingsWindowController.swift",
                 "Views/StatusBarController.swift"
             ],
-            resources: [.process("../Resources")],
+            resources: [],
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("AVFoundation"),
@@ -41,5 +43,7 @@ let package = Package(
                 .linkedFramework("ServiceManagement")
             ]
         )
+        // Note: Unit tests require Xcode project due to XCTest framework dependencies
+        // Tests are available in Tests/VoiceKeyTests/ and can be run via Xcode
     ]
 )

@@ -1,4 +1,5 @@
 import SwiftUI
+import Carbon
 
 struct SettingsView: View {
     @StateObject private var settings = DoubleTapTalkSettings.shared
@@ -9,6 +10,9 @@ struct SettingsView: View {
     @State private var llmApiKeyInput: String = ""
     @State private var showLLMApiKey: Bool = false
     @State private var llmBaseURLInput: String = ""
+    
+    // Accessibility permission state
+    @State private var hasAccessibilityPermission: Bool = AccessibilityService.shared.hasAccessibilityPermission()
     
     var body: some View {
         Form {
@@ -103,6 +107,50 @@ struct SettingsView: View {
                 
                 if settings.llmEnabled {
                     VStack(alignment: .leading, spacing: 12) {
+                        // App-specific polish toggle
+                        Toggle(isOn: $settings.useAppSpecificPolish) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("App-specific polish (recommended)")
+                                    .fontWeight(.medium)
+                                Text("Automatically adapt polishing based on target app context")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        
+                        // Accessibility permission warning
+                        if !hasAccessibilityPermission && settings.useAppSpecificPolish {
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.orange)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Accessibility permission required for full context")
+                                        .font(.caption)
+                                        .fontWeight(.medium)
+                                    Text("Grant permission to read existing text in fields and terminal output for better polishing.")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                    Button("Open System Preferences") {
+                                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .controlSize(.small)
+                                }
+                            }
+                            .padding(10)
+                            .background(Color.orange.opacity(0.1))
+                            .cornerRadius(8)
+                            Divider()
+                        } else if hasAccessibilityPermission {
+                            HStack(spacing: 6) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                                Text("Accessibility enabled — context reading active")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Divider()
+                        }
                         // Provider selection
                         Picker("Provider", selection: $settings.llmProvider) {
                             ForEach(LLMProvider.allCases, id: \.self) { provider in
@@ -184,17 +232,23 @@ struct SettingsView: View {
                                 .frame(width: 150)
                         }
                         
-                        // System prompt
-                        TextEditor(text: $settings.llmSystemPrompt)
-                            .frame(height: 100)
-                            .scrollContentBackground(.hidden)
-                            .padding(4)
-                            .background(Color(NSColor.textBackgroundColor))
-                            .cornerRadius(4)
-                        
-                        Text("The system prompt defines how the AI should polish your text. Keep it concise.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        // System prompt (only shown when app-specific polish is disabled)
+                        if !settings.useAppSpecificPolish {
+                            TextEditor(text: $settings.llmSystemPrompt)
+                                .frame(height: 100)
+                                .scrollContentBackground(.hidden)
+                                .padding(4)
+                                .background(Color(NSColor.textBackgroundColor))
+                                .cornerRadius(4)
+                            
+                            Text("The system prompt defines how the AI should polish your text. Keep it concise.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("App-specific polish uses intelligent profiles for different apps. Custom system prompts are ignored when this is enabled.")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
                     .padding(.vertical, 8)
                 }
@@ -212,6 +266,7 @@ struct SettingsView: View {
             apiKeyInput = settings.apiKey ?? ""
             llmApiKeyInput = settings.llmAPIKey ?? ""
             llmBaseURLInput = settings.llmBaseURL ?? ""
+            hasAccessibilityPermission = AccessibilityService.shared.hasAccessibilityPermission()
         }
         .onChange(of: settings.llmBaseURL) { newValue in
             llmBaseURLInput = newValue ?? ""

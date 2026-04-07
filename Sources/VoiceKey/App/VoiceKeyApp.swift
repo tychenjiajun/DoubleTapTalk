@@ -1,5 +1,6 @@
 import SwiftUI
 import ServiceManagement
+import AppKit
 
 @main
 struct DoubleTapTalkApp: App {
@@ -25,6 +26,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         logger.debug("PID: \(ProcessInfo.processInfo.processIdentifier)")
         logger.debug("Bundle: \(Bundle.main.bundleIdentifier ?? "unknown")")
         logger.debug("Version: \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown")")
+        
+        // Check Accessibility permission
+        if !AccessibilityService.shared.hasAccessibilityPermission() {
+            logger.warning("Accessibility permission not granted — context reading will be limited")
+            logger.info("Users can grant permission in Settings > Privacy & Security > Accessibility")
+        } else {
+            logger.info("Accessibility permission granted — full context reading enabled")
+        }
         
         // Initialize services
         logger.debug("Initializing TextInjectionService...")

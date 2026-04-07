@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 enum LLMProvider: String, CaseIterable, Codable {
     case openai = "openai"
@@ -39,6 +40,8 @@ struct LLMSettings: Codable {
     var systemPrompt: String
     var baseURL: String?  // Optional custom base URL for OpenAI-compatible APIs
     var timeout: Double   // Timeout in seconds for polishing operation
+    var pinnedProfile: PolishProfile?  // User-pinned profile, nil = auto-detect
+    var useAppSpecificPolish: Bool     // Enable context-aware profiles
     
     static let `default` = LLMSettings(
         enabled: false,
@@ -57,6 +60,8 @@ struct LLMSettings: Codable {
         Do not add or remove content from the original message.
         """,
         baseURL: nil,
-        timeout: 5.0
+        timeout: 5.0,
+        pinnedProfile: nil,
+        useAppSpecificPolish: true
     )
 }

@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 final class LLMService {
     static let shared = LLMService()
@@ -12,7 +13,14 @@ final class LLMService {
         self.session = URLSession(configuration: config)
     }
     
-    func polish(text: String, settings: LLMSettings) async throws -> String {
+    // MARK: - Context-Aware Polishing
+    
+    /// Polish text using context-aware profiles
+    func polish(
+        text: String,
+        settings: LLMSettings,
+        context: PolishContext?
+    ) async throws -> String {
         guard settings.enabled else {
             logger.debug("LLM polishing disabled, returning original text")
             return text
@@ -23,12 +31,55 @@ final class LLMService {
             return text
         }
         
-        logger.info("Polishing text with \(settings.provider.displayName) - model: \(settings.model)")
+        // Use context-aware profile if available and enabled
+        if settings.useAppSpecificPolish, let context = context {
+            return try await polishWithContextAwareProfile(text: text, settings: settings, context: context)
+        }
+        
+        // Fallback to legacy mode with custom system prompt
+        logger.info("Using legacy mode with custom system prompt")
+        return try await polishWithCustomPrompt(text: text, settings: settings)
+    }
+    
+    private func polishWithContextAwareProfile(
+        text: String,
+        settings: LLMSettings,
+        context: PolishContext
+    ) async throws -> String {
+        logger.info("Polishing text with context-aware profile")
+        logger.debug("Target app: \(context.targetApp.appName), locale: \(context.userLocale)")
+        
+        // Auto-detect or use pinned profile
+        let profile: PolishProfile = settings.pinnedProfile ?? .detect(from: context.targetApp)
+        
+        logger.info("Polish profile: \(profile.rawValue) | app: \(context.targetApp.appName)")
+        
+        // Build the context-aware prompt
+        let systemPrompt = profile.systemPrompt(context: context)
+        
+        // Wrap user content with profile-specific framing
+        let userContent = wrapUserContent(text, profile: profile)
+        
+        let response = try await callLLM(
+            provider: settings.provider,
+            apiKey: settings.apiKey!,
+            model: settings.model,
+            systemPrompt: systemPrompt,
+            userContent: userContent,
+            baseURL: settings.baseURL
+        )
+        
+        logger.info("Polished text (first 100 chars): \(response.prefix(100))\(response.count > 100 ? "..." : "")")
+        return response
+    }
+    
+    private func polishWithCustomPrompt(text: String, settings: LLMSettings) async throws -> String {
+        logger.info("Polishing text with custom system prompt")
         logger.debug("Original text (first 100 chars): \(text.prefix(100))\(text.count > 100 ? "..." : "")")
         
         let response = try await callLLM(
             provider: settings.provider,
-            apiKey: apiKey,
+            apiKey: settings.apiKey!,
             model: settings.model,
             systemPrompt: settings.systemPrompt,
             userContent: text,
@@ -37,6 +88,17 @@ final class LLMService {
         
         logger.info("Polished text (first 100 chars): \(response.prefix(100))\(response.count > 100 ? "..." : "")")
         return response
+    }
+    
+    private func wrapUserContent(_ text: String, profile: PolishProfile) -> String {
+        switch profile {
+        case .terminal:
+            return "Convert this speech to terminal input: \(text)"
+        case .searchQuery:
+            return "Convert this speech to a search query: \(text)"
+        default:
+            return "Clean up this speech transcript: \(text)"
+        }
     }
     
     private func callLLM(
