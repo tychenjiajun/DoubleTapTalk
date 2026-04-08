@@ -326,29 +326,6 @@ A: Absolutely! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. New backen
 - Bilingual command recognition (English + Chinese)
 - Automatic order format conversion
 
----
-
-### 🗺️ Roadmap
-
-**v1.1 **(Next)
-- [ ] Configurable hotkeys in Settings UI (no recompiling needed)
-- [ ] Voice activity detection (VAD) for auto-start/stop recording
-- [ ] Custom phrase shortcuts (e.g., "code please" → insert template)
-- [ ] More trading platform support
-
-**v1.2 **(Planned)
-- [ ] Speech-to-code feature (describe function → generate implementation)
-- [ ] Multi-step command chains ("create branch, switch to it, show status")
-- [ ] Siri Shortcuts integration
-- [ ] Export/import settings profiles
-
-**Long-term Vision**:
-- Full offline capability with on-device LLM polishing
-- Team collaboration features (shared custom phrases)
-- Plugin system for third-party integrations
-
----
-
 ### 🤝 Contributing
 
 Contributions are **highly welcome**! 💙 Whether you're fixing bugs, adding new backends, improving docs, or suggesting features—every contribution matters.
