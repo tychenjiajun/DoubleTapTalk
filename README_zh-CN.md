@@ -1,53 +1,101 @@
-# DoubleTapTalk 中文文档
+# 🎤 DoubleTapTalk 语音助手
 
 <div align="center">
 
-**macOS 语音转文字助手**
+**macOS 语音转文字助手 | macOS Speech-to-Text Utility**
 
-双击快捷键激活，快速转录并输入到任何应用程序
+双击快捷键激活，闪电般快速转录并智能 AI 优化文本输入到任何应用
 
-[English Version](README.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/macos-13%2B-green.svg)](https://www.apple.com/mac/)
+[![Swift](https://img.shields.io/badge/Swift-5.9-orange.svg)](https://swift.org/)
+[![版本](https://img.shields.io/badge/version-1.0.0-brightgreen.svg)]()
 
-</div>
+📖 [英文文档](README.md) | [中文](#概述)
 
 ---
 
-## 概述
+## 🎯 概述
 
-DoubleTapTalk 是一款轻量级 macOS 菜单栏应用，通过双击快捷键实现语音转文字功能。双击 Control 键开始录音，自然说话，然后单击停止（不带优化）或双击停止（带 AI 优化），文字会自动出现在当前应用的光标位置。
+DoubleTapTalk 彻底改变了您与 Mac 的交互方式。告别繁琐打字，**自然说话**即可将文字呈现眼前——还可智能 AI 优化，实现完美语法、上下文感知的格式和专业语气。
 
-### ✨ 功能特点
+### 💡 为什么选择 DoubleTapTalk？
 
-#### 核心功能
-- **🎤 按键录音**: 双击 Control 键开始录音
-- **⏱️ 智能热键控制**:
-  - 双击 Control → 开始录音
-  - 单击 Control → 停止，不进行优化
-  - 双击 Control → 停止，进行 AI 优化
-- **🌐 多语言支持**: 自动检测或从 100+ 种语言中手动选择
-- **🔒 安全存储**: API 密钥加密存储在 macOS Keychain
-- **🚫 无 Dock 图标**: 安静地运行在菜单栏中
+| 功能 | 优势 |
+|------|------|
+| ⚡ **比打字快 3 倍** | 平均语速：150 词/分钟 vs 打字：40-50 词/分钟 |
+| 🧠 **AI 智能优化** | 智能场景识别，自动格式化终端命令、邮件、代码注释、聊天消息 |
+| 🔒 **隐私优先** | 可选本地 whisper.cpp 后端，数据不出设备 |
+| 🌍 **100+ 语言支持** | 自动检测或手动选择中文、英语、西班牙语、法语、日语等 |
+| 🎨 **零学习成本** | 简单的双击手势，随处可用 |
 
-#### 多种语音识别后端
+<div align="center">
+
+**工作原理**：双击 Control → 说话 → 文字出现（可选 AI 优化）！
+
+</div>
+
+### ✨ 核心功能
+
+#### 🎙️ 智能语音识别
+- **双击激活**：简单的 Control+Control 手势开始录音
+- **智能停止选项**:
+  - 👆 单击 → 插入原始转录（即时）
+  - 👆👆 双击 → 插入 AI 优化文本（智能）
+- **多语言支持**：自动检测 100+ 种语言或手动选择
+- **安全 API 存储**：密钥加密在 macOS Keychain 中，从不暴露
+- **菜单栏设计**：安静运行，不占用 Dock 图标空间
+
+#### 🔄 灵活的识别后端
 选择您偏好的语音识别服务：
-- **OpenAI Whisper**（云端）- 高精度，需要 API 密钥
-- **Groq**（云端）- 边缘硬件上的快速推理
-- **DashScope ASR Flash**（云端）- DashScope 高级模型，中文效果极佳
-- **本地 whisper.cpp**（离线）- 免费、隐私友好，需自托管服务器
 
-#### AI 文本优化（可选）
-使用大模型改进转录文本：
-- **多提供商支持**: OpenAI、Anthropic、Google、ModelScope
-- **自定义 Base URL**: 连接 Ollama、LM Studio、vLLM 等
-- **可配置超时**: 1-30 秒（默认 5 秒）
-- **优雅降级**: 超时或错误时自动回退到原文
-- **系统提示词定制**: 调整优化行为
+| 后端 | 类型 | 最佳用途 | 准确度 | 速度 |
+|------|------|----------|--------|------|
+| **OpenAI Whisper** | 云端 ⛅ | 最高准确率 | ⭐⭐⭐⭐⭐ | 快 |
+| **Groq** | 云端 ⛅ | 超快速推理 | ⭐⭐⭐⭐ | ⚡ 超快 |
+| **DashScope Flash** | 云端 ⛅ | 中文处理 | ⭐⭐⭐⭐⭐ | 快 |
+| **Local whisper.cpp** | 离线 💻 | 隐私敏感工作 | ⭐⭐⭐⭐ | 中等 |
 
-#### 开发者友好
-- **全面日志**: 调试位置 `~/Library/Caches/DoubleTapTalk.log`
-- **辅助脚本**: `view-logs.sh`、`check-polish-logs.sh`、`test-injection.sh`
-- **Swift Package Manager**: 干净的构建系统
-- **模块化架构**: 易于扩展后端/服务
+💡 **无绑定**: 随时在设置中切换后端！
+
+#### ✨ AI 智能文本优化
+可选的大语言模型文本增强，理解上下文：
+
+**支持的提供商**：OpenAI GPT-4o、Claude 3、Google Gemini、ModelScope、Ollama（本地）、LM Studio
+
+**场景感知配置文件**：
+- 💻 **终端** → 转换命令为可执行格式，保留问题为自然语言
+- 💬 **聊天应用**（Slack、Discord、微信）→ 随意语气，保留表情符号
+- 📧 **邮件**（Mail、Outlook、Gmail）→ 专业语气，正确标点
+- 💾 **代码注释** → 简洁技术语言，无需标记
+- 🔍 **搜索栏** → 关键词提取用于干净查询
+- 📈 **交易终端** → 订单格式转换，双语支持
+
+**示例**：
+```
+输入："check if the tests are passing"
+输出：check if the tests are passing ✓ （保留为问题）
+
+输入："run the test suite"
+输出：npm test ✓ （转换为命令）
+
+输入："I'm looking for recent build failures in logs"
+输出：I'm looking for recent build failures in logs ✓ （保留意图）
+```
+
+#### 👨‍💻 开发者友好设计
+
+为可扩展性和调试而生：
+
+- **全面日志**：实时调试位于 `~/Library/Caches/DoubleTapTalk.log`
+- **辅助脚本**：
+  ```bash
+  ./view-logs.sh watch        # 实时监控日志
+  ./check-polish-logs.sh      # 验证优化功能状态
+  ./test-injection.sh browser # 测试文本注入
+  ```
+- **Swift Package Manager**：干净的现代化构建系统
+- **模块化架构**：轻松扩展后端和服务
 
 ### 📋 系统要求
 
@@ -184,23 +232,111 @@ tail -30 ~/Library/Caches/DoubleTapTalk.log | grep -i error
 
 MIT License - 详见 [LICENSE](LICENSE) 文件。
 
+### ❓ 常见问题解答
+
+**问：这个软件免费吗？**
+答：应用本身 100% 免费且开源（MIT 许可）。云端后端（OpenAI、Groq 等）需要 API 密钥，但本地 whisper.cpp 完全免费！
+
+**问：使用 OpenAI Whisper 要花多少钱？**
+答：大约每分钟音频$0.006。如果您每天语音输入30分钟，月费约$5-6。
+
+**问：可以离线使用吗？**
+答：可以！设置本地 whisper.cpp 服务器后，完全不需要联网。
+
+**问：这会在后台录音吗？**
+答：绝对不会！只有当您主动双击 Control 键时才会录音。永远不会在后台监听。
+
+**问：哪些语言效果最好？**
+答：Whisper 支持 100+ 种语言。英语和中文准确度最高。自动检测能很好地处理混合语言。
+
+**问：可以自定义快捷键吗？**
+答：目前硬编码为双击 Control。欢迎修改源代码并重新构建——查看 `HotkeyService.swift`！
+
+**问：AI 优化会改变我的意思吗？**
+答：不会！从 v1.0.0 开始，提示词设计为保留您的确切意图。仅修正语法、移除填充词、适应语气。
+
+**问：我可以贡献代码吗？**
+答：当然！查看 [CONTRIBUTING.md](CONTRIBUTING.md) 了解指南。新后端支持、bug 修复和文档改进都受欢迎！
+
+---
+
+### 💼 真实应用场景
+
+**开发者**：
+```bash
+# 无需打字编写提交信息
+"fix the memory leak in user authentication module"
+→ "Fix memory leak in user authentication module"
+
+# 免操作终端命令
+"show me the last 20 git commits"
+→ "git log --oneline -20"
+```
+
+**作家与内容创作者**：
+- 通过自然语音快速撰写邮件，速度提升 3 倍
+- 用 AI 增强语法润色博客文章
+- 即时切换随意（聊天）和专业（邮件）语气
+
+**研究人员与学者**：
+- 讲座/会议中口述笔记
+- 生成研究代码的技术注释
+- 将想法转换为文献综述的搜索查询
+
+**交易者**（支持中文平台）：
+- 通过语音执行交易指令（富途牛牛、同花顺）
+- 双语命令识别（英语 + 中文）
+- 自动订单格式转换
+
+---
+
+### 🗺️ 开发路线图
+
+**v1.1**（下一个版本）：
+- [ ] 设置 UI 中可配置快捷键（无需重新编译）
+- [ ] 语音活动检测（VAD），自动开始/停止录音
+- [ ] 自定义短语快捷方式（如 "code please" → 插入模板）
+- [ ] 更多交易平台支持
+
+**v1.2**（计划中）：
+- [ ] 语音转代码功能（描述函数 → 生成实现）
+- [ ] 多步骤命令链（"创建分支、切换到它、显示状态"）
+- [ ] Siri 快捷指令集成
+- [ ] 导出/导入设置配置文件
+
+**长期愿景**：
+- 完整离线能力，支持设备上 LLM 优化
+- 团队协作功能（共享自定义短语）
+- 第三方集成的插件系统
+
+---
+
 ### 🤝 贡献
 
-欢迎贡献！请随时提交问题或拉取请求。
+**非常欢迎**贡献！💙 无论您是修复 bug、添加新后端、改进文档，还是提出新功能——每项贡献都至关重要。
+
+👉 查看 [CONTRIBUTING.md](CONTRIBUTING.md) 了解详细的起步指南。
 
 ### 📄 文档
 
 - [英文版](README.md)
 - [中文版](README_zh-CN.md) （本文档）
+- [Prompt Engineering Fixes](docs/PROMPT_FIXES.md) - LLM 优化技术细节
+- [贡献指南](CONTRIBUTING.md)
 
 ---
 
 <div align="center">
 
-用心打造 by Jiajun Chen | 开源许可：MIT
+**用心打造 by [Jiajun Chen](https://github.com/tychenjiajun)** | 开源许可：[MIT License](LICENSE)
+
+---
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/macos-13%2B-green.svg)](https://www.apple.com/mac/)
 [![Swift](https://img.shields.io/badge/Swift-5.9-orange.svg)](https://swift.org/)
+[![Stars](https://img.shields.io/github/stars/tychenjiajun/voice-key?style=social)](https://github.com/tychenjiajun/voice-key/stargazers)
+
+📧 **有问题？** 提交 [issue](https://github.com/tychenjiajun/voice-key/issues) 或直接联系我们！
 
 </div>

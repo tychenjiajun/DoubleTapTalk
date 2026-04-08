@@ -225,7 +225,4 @@ Every contribution matters, whether it's a code fix, documentation improvement, 
 - Check existing documentation
 - Review related pull requests
 
----
-
-Last Updated: 2024-04-06  
-Author: Jiajun Chen <tychenjiajun@live.cn>
+Every contribution matters, whether it's a code fix, documentation improvement, or helpful suggestion. Thank you for helping make DoubleTapTalk better!
