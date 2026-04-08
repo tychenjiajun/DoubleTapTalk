@@ -105,12 +105,27 @@ final class ASRService {
                     userLocale: localeIdentifier
                 )
                 
+                logger.debug("Polish context:")
+                logger.debug("  - Target app: \(polishContext.targetApp.appName)")
+                logger.debug("  - Bundle ID: \(polishContext.targetApp.bundleID ?? "unknown")")
+                logger.debug("  - Is terminal: \(polishContext.targetApp.isTerminal)")
+                logger.debug("  - Existing text length: \((polishContext.existingText?.count ?? 0)) chars")
+                logger.debug("  - Terminal context length: \((polishContext.conversationHint?.count ?? 0)) chars")
+                
                 do {
                     // Try polishing with configurable timeout
                     let polishedText = try await withTimeout(settings.llmTimeout) {
                         try await LLMService.shared.polish(text: text, settings: llmSettings, context: polishContext)
                     }
-                    logger.info("Polished result: '\(polishedText)'")
+                    logger.info("✓ Polished successfully: '\(polishedText.prefix(100))\(polishedText.count > 100 ? "..." : "")'")
+                    
+                    // Compare original vs polished
+                    if polishedText == text {
+                        logger.info("→ No changes made (original and polished text are identical)")
+                    } else {
+                        logger.debug("→ Original length: \(text.count) chars → Polished length: \(polishedText.count) chars")
+                    }
+                    
                     text = polishedText
                 } catch {
                     logger.error("LLM polishing failed: \(error). Using original text.")

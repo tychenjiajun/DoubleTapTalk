@@ -54,11 +54,30 @@ final class LLMService {
         
         logger.info("Polish profile: \(profile.rawValue) | app: \(context.targetApp.appName)")
         
+        // Log terminal-specific context if applicable
+        if profile == .terminal {
+            logger.info("=== TERMINAL POLISH DEBUG ===")
+            logger.debug("Original ASR text: '\(text)'")
+            logger.debug("Target app bundle ID: \(context.targetApp.bundleID ?? "unknown")")
+            logger.debug("Existing field text (first 200 chars): \((context.existingText?.prefix(200) ?? "none"))")
+            logger.debug("Terminal screen context (first 500 chars): \((context.conversationHint?.prefix(500) ?? "none"))...")
+        }
+        
         // Build the context-aware prompt
         let systemPrompt = profile.systemPrompt(context: context)
         
+        // Log the complete prompt being sent to LLM for debugging
+        logger.debug("=== LLM REQUEST DEBUG ===")
+        logger.debug("System prompt length: \(systemPrompt.count) chars")
+        if systemPrompt.count < 1000 {
+            logger.debug("System prompt:\n\(systemPrompt)")
+        } else {
+            logger.debug("System prompt (first 500 chars):\n\(systemPrompt.prefix(500))...")
+        }
+        
         // Wrap user content with profile-specific framing
         let userContent = wrapUserContent(text, profile: profile)
+        logger.debug("User content (polished): '\(userContent)'")
         
         let response = try await callLLM(
             provider: settings.provider,
@@ -69,7 +88,9 @@ final class LLMService {
             baseURL: settings.baseURL
         )
         
-        logger.info("Polished text (first 100 chars): \(response.prefix(100))\(response.count > 100 ? "..." : "")")
+        logger.info("Polished text (first 200 chars): \(response.prefix(200))\(response.count > 200 ? "..." : "")")
+        logger.debug("Polished text final: '\(response)' (\(response.count) chars)")
+        logger.info("=== END POLISH DEBUG ===")
         return response
     }
     
@@ -91,13 +112,25 @@ final class LLMService {
     }
     
     private func wrapUserContent(_ text: String, profile: PolishProfile) -> String {
+        // Use neutral framing - the system prompt already establishes the context
+        // Avoid contradictory instructions like "Convert to X" when the prompt says "preserve original"
         switch profile {
         case .terminal:
-            return "Convert this speech to terminal input: \(text)"
+            return "Speech to polish: \(text)"
         case .searchQuery:
-            return "Convert this speech to a search query: \(text)"
-        default:
-            return "Clean up this speech transcript: \(text)"
+            return "Speech to polish: \(text)"
+        case .codeComment:
+            return "Speech to polish: \(text)"
+        case .codeEditor:
+            return "Speech to polish: \(text)"
+        case .tradingTerminal:
+            return "Speech to polish: \(text)"
+        case .chatMessaging:
+            return "Speech to polish: \(text)"
+        case .emailFormal:
+            return "Speech to polish: \(text)"
+        case .general:
+            return "Speech to polish: \(text)"
         }
     }
     
