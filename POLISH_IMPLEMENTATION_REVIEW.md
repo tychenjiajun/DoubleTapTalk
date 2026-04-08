@@ -176,7 +176,7 @@ let localeIdentifier = Locale.current.identifier  // "en_US", "zh_CN", etc.
 
 ### 7. ✅ Comprehensive Unit Tests
 
-Created `Tests/VoiceKeyTests/PolishProfileTests.swift` with:
+Created `Tests/DoubleTapTalkTests/PolishProfileTests.swift` with:
 
 - **Terminal Detection Tests** (4 test cases)
 - **Code Editor Detection Tests** (3 test cases including comment detection)
@@ -238,12 +238,12 @@ Automatically adapt polishing style based on the target application:
 
 | File | Changes |
 |------|---------|
-| `Sources/VoiceKey/Models/PolishModels.swift` | Added `BundleIDMappings`, fixed `getWindowTitle`, consolidated detection methods, improved prompts, added test initializer |
-| `Sources/VoiceKey/Services/ASRService.swift` | Single Accessibility API call, better locale handling |
-| `Sources/VoiceKey/Services/AccessibilityService.swift` | Added `captureFocusedElementInfoDetailed()` method |
+| `Sources/DoubleTapTalk/Models/PolishModels.swift` | Added `BundleIDMappings`, fixed `getWindowTitle`, consolidated detection methods, improved prompts, added test initializer |
+| `Sources/DoubleTapTalk/Services/ASRService.swift` | Single Accessibility API call, better locale handling |
+| `Sources/DoubleTapTalk/Services/AccessibilityService.swift` | Added `captureFocusedElementInfoDetailed()` method |
 | `README.md` | Added App-Specific Polish documentation |
 | `Package.swift` | Updated with test target note |
-| `Tests/VoiceKeyTests/PolishProfileTests.swift` | **New file** - 40+ unit tests |
+| `Tests/DoubleTapTalkTests/PolishProfileTests.swift` | **New file** - 40+ unit tests |
 
 ---
 
@@ -259,7 +259,7 @@ $ grep -r "BundleIDMappings.contains" Sources/
 # Multiple matches confirming usage
 
 # Window title implementation exists
-$ grep -A 20 "func getWindowTitle" Sources/VoiceKey/Models/PolishModels.swift
+$ grep -A 20 "func getWindowTitle" Sources/DoubleTapTalk/Models/PolishModels.swift
 # Shows full implementation
 ```
 

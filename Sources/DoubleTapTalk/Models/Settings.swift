@@ -207,6 +207,10 @@ final class DoubleTapTalkSettings: ObservableObject {
         self.useLocalServer = defaults.bool(forKey: Keys.useLocalServer)
         
         // Load app-specific polish setting (must load before other LLM settings that may reference it)
+        // Default to true for new installs, respect saved value for existing users
+        if defaults.object(forKey: Keys.useAppSpecificPolish) == nil {
+            defaults.set(true, forKey: Keys.useAppSpecificPolish)
+        }
         self.useAppSpecificPolish = defaults.bool(forKey: Keys.useAppSpecificPolish)
         
         // Load LLM polishing settings

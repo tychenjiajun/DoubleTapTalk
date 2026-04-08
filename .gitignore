@@ -6,7 +6,7 @@ DerivedData/
 *.xcuserdatad
 xcuserdata/
 *.dmg
-VoiceKey.app
+DoubleTapTalk.app
 
 # IDE
 .vscode/

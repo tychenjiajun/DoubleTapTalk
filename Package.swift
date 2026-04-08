@@ -11,9 +11,9 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "DoubleTapTalk",
-            path: "Sources/VoiceKey",
+            path: "Sources/DoubleTapTalk",
             sources: [
-                "App/VoiceKeyApp.swift",
+                "App/DoubleTapTalkApp.swift",
                 "Backends/GroqBackend.swift",
                 "Backends/LocalWhisperBackend.swift",
                 "Backends/OpenAIWhisperBackend.swift",
@@ -44,6 +44,6 @@ let package = Package(
             ]
         )
         // Note: Unit tests require Xcode project due to XCTest framework dependencies
-        // Tests are available in Tests/VoiceKeyTests/ and can be run via Xcode
+        // Tests are available in Tests/DoubleTapTalkTests/ and can be run via Xcode
     ]
 )

@@ -10,6 +10,8 @@ final class HotkeyService {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var isRecording = false
+    private var isTapActive = false
+    private var healthCheckTimer: Timer?
     private let logger = FileLogger.shared
     
     // Track tap timing for double-tap detection
@@ -38,10 +40,16 @@ final class HotkeyService {
         }
         
         logger.info("Hotkey service started successfully - double-tap Control to record")
+        
+        // Start health check timer
+        startHealthCheck()
     }
     
     func stop() {
         logger.info("Stopping hotkey service...")
+        // Stop health check
+        healthCheckTimer?.invalidate()
+        healthCheckTimer = nil
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
             logger.debug("Event tap disabled")
@@ -50,8 +58,14 @@ final class HotkeyService {
             CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
             logger.debug("Run loop source removed")
         }
+        // Remove tap invalidation listener
+        if let tap = eventTap {
+            CFMachPortInvalidate(tap)
+            logger.debug("Event tap invalidated")
+        }
         eventTap = nil
         runLoopSource = nil
+        isTapActive = false
         logger.info("Hotkey service stopped")
     }
     
@@ -167,12 +181,44 @@ final class HotkeyService {
                 
                 runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
                 CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
+                
+                // Add tap invalidation handler to detect when tap is killed by system
+                CFMachPortSetInvalidationCallBack(tap, { (tap, refcon) in
+                    guard let refcon = refcon else { return }
+                    let service = Unmanaged<HotkeyService>.fromOpaque(refcon).takeUnretainedValue()
+                    service.logger.error("Event tap was invalidated by system!")
+                    service.isTapActive = false
+                    DispatchQueue.main.async {
+                        // Attempt recovery after short delay
+                        sleep(1)
+                        service.start()
+                    }
+                })
+                
                 CGEvent.tapEnable(tap: tap, enable: true)
+                isTapActive = true
+                logger.debug("Event tap enabled and active")
                 return true
             }
         }
         
         return false
+    }
+    
+    private func startHealthCheck() {
+        healthCheckTimer?.invalidate()
+        healthCheckTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            if self.isTapActive {
+                self.logger.debug("Hotkey health check: Tap is active, recording state: \(self.isRecording)")
+            } else {
+                self.logger.error("Hotkey health check: Tap is NOT active!")
+                DispatchQueue.main.async {
+                    self.start()
+                }
+            }
+        }
+        RunLoop.current.add(healthCheckTimer!, forMode: .common)
     }
     
     private func showPermissionsAlert() {

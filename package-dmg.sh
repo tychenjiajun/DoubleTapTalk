@@ -31,7 +31,7 @@ cat > "${APP_BUNDLE}/Contents/Info.plist" << 'PLIST'
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
-    <string>com.voicekey.app</string>
+    <string>com.jiajun.doubletaptalk.app</string>
     <key>CFBundleName</key>
     <string>DoubleTapTalk</string>
     <key>CFBundleDisplayName</key>

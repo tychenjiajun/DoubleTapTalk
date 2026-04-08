@@ -15,7 +15,7 @@ show_status() {
     fi
     
     # Check accessibility permissions
-    result=$(osascript -e 'tell application "System Events" to get (name of processes where enabled is true)' 2>/dev/null | grep -i voicekey)
+    result=$(osascript -e 'tell application "System Events" to get (name of processes where enabled is true)' 2>/dev/null | grep -i doubletaptalk)
     if [ -n "$result" ]; then
         echo "✓ Accessibility permission GRANTED"
     else
