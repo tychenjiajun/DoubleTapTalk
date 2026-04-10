@@ -41,11 +41,26 @@ final class ASRService {
         logger.log("LLM Polishing: \(settings.llmEnabled ? "enabled (\(settings.llmProvider.displayName))" : "disabled")")
         
         do {
-            let result = try await backend.transcribe(
+            // Try transcription with single retry for empty responses
+            var result = try await backend.transcribe(
                 audioURL: audioURL,
                 language: settings.language == "auto" ? nil : settings.language,
                 model: settings.model
             )
+            
+            // Single retry if ASR returned empty result (API returned 200 but no content)
+            if result.text.isEmpty {
+                logger.warning("ASR returned empty result, retrying once...")
+                result = try await backend.transcribe(
+                    audioURL: audioURL,
+                    language: settings.language == "auto" ? nil : settings.language,
+                    model: settings.model
+                )
+                if result.text.isEmpty {
+                    logger.error("ASR still empty after retry")
+                    throw ASRError.transcriptionFailed("Empty transcription after retry")
+                }
+            }
             
             var text = result.text
             logger.log("Got transcription: '\(text)'")

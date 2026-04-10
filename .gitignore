@@ -17,3 +17,4 @@ DoubleTapTalk.app
 
 # macOS
 .DS_Store
+*.html

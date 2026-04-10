@@ -13,6 +13,39 @@ final class LLMService {
         self.session = URLSession(configuration: config)
     }
     
+    /// Strip leading/trailing markdown code block markers while preserving internal markdown
+    private func stripMarkdownCodeBlocks(_ text: String) -> String {
+        var result = text
+        
+        // Strip leading ``` with optional language specifier
+        // Pattern: ``` at start, possibly followed by language name on same line
+        if result.hasPrefix("```") {
+            // Find the first newline after ```
+            if let firstNewlineIndex = result.firstIndex(of: "\n") {
+                // Check if there's a language specifier between ``` and newline
+                let afterBackticks = result[result.index(result.startIndex, offsetBy: 3)..<firstNewlineIndex]
+                let langSpecifier = String(afterBackticks).trimmingCharacters(in: .whitespaces)
+                // If langSpecifier is empty or a valid language name, remove the opening block
+                if langSpecifier.isEmpty || langSpecifier.count < 20 {
+                    result = String(result[result.index(after: firstNewlineIndex)...])
+                } else {
+                    // Unusual case - just remove the ```
+                    result = String(result.dropFirst(3))
+                }
+            } else {
+                // No newline - just remove ```
+                result = String(result.dropFirst(3))
+            }
+        }
+        
+        // Strip trailing ```
+        if result.hasSuffix("```") {
+            result = String(result.dropLast(3))
+        }
+        
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
     // MARK: - Context-Aware Polishing
     
     /// Polish text using context-aware profiles
@@ -240,7 +273,7 @@ final class LLMService {
             throw ASRError.invalidResponse
         }
         
-        return content!.trimmingCharacters(in: .whitespacesAndNewlines)
+        return stripMarkdownCodeBlocks(content!)
     }
     
     private func callAnthropic(
@@ -286,7 +319,7 @@ final class LLMService {
             throw ASRError.invalidResponse
         }
         
-        return content.trimmingCharacters(in: .whitespacesAndNewlines)
+        return stripMarkdownCodeBlocks(content)
     }
     
     private func callGoogle(
@@ -335,6 +368,6 @@ final class LLMService {
             throw ASRError.invalidResponse
         }
         
-        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return stripMarkdownCodeBlocks(text)
     }
 }

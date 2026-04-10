@@ -106,7 +106,8 @@ struct DashscopeASRBackend: ASRBackend {
               !content.isEmpty else {
             logger.error("DashScope ASR: No transcription text found in response")
             logger.error("Full JSON keys: \(json.keys.joined(separator: ", "))")
-            throw ASRError.transcriptionFailed("Empty or invalid response from API")
+            // Return empty result instead of throwing - let caller decide to retry
+            return ASRResult(text: "", language: nil, confidence: nil, duration: nil)
         }
         
         // Extract language from annotations if available
