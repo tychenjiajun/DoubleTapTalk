@@ -226,8 +226,8 @@ struct AppContext {
         } else {
             // Try to capture it automatically (requires accessibility permission)
             let captured = AccessibilityService.shared.captureFocusedElementInfo(from: app)
-            self.focusedElementRole = captured.role
-            self.focusedElementValue = captured.value
+            self.focusedElementRole = captured?.role
+            self.focusedElementValue = captured?.value
         }
         
         self.windowTitle = Self.getWindowTitle(for: app)
@@ -425,7 +425,47 @@ struct PolishContext {
     let userLocale: String  // e.g., "en", "en_US", "zh"
 }
 
+// MARK: - Shared Prompt Sections
+
+/// Reusable language preservation guard (CRITICAL — shared by every profile)
+/// Kept deliberately compact: the wrong/right pair is what models actually learn from.
+private let languagePreservationSection = """
+⚠️ NEVER translate or transliterate: English stays English, 中文 stays 中文 — keep every script exactly as spoken.
+Wrong: "check logs" → 查看日志. Right: "check logs" → check logs; "查看日志" → 查看日志.
+"""
+
+/// Reusable base instruction
+private let baseInstruction = "Output ONLY the polished text. No explanations, quotes, or preamble."
+
+/// Builds a compact profile prompt: shared base + anti-translation guard +
+/// one unique rule line (economy — mirrors the ~200-token refinement style).
+private func buildPrompt(role: String, rule: String, contextHint: String) -> String {
+    return """
+    \(baseInstruction)
+    \(role)
+    \(languagePreservationSection)
+    \(rule)
+    \(contextHint)
+    """
+}
+
+/// Build context hint from existing text and conversation hint
+private func buildContextHint(existingText: String?, conversationHint: String?) -> String {
+    switch (existingText, conversationHint) {
+    case (let text?, _) where !(text.isEmpty):
+        if let hint = conversationHint, !hint.isEmpty {
+            return "\n\nExisting text (last 200 chars):\n```\n\(String(text.suffix(200)))\n```\n\nRecent context:\n```\n\(hint)\n```"
+        }
+        return "\n\nExisting text (last 200 chars):\n```\n\(String(text.suffix(200)))\n```"
+    case (_, let hint?) where !(hint.isEmpty):
+        return "\n\nRecent context:\n```\n\(hint)\n```"
+    default:
+        return ""
+    }
+}
+
 extension PolishProfile {
+    
     /// Detect what shell/command is currently running from terminal prompt
     private func detectTerminalBinary(from context: String?) -> String? {
         guard let context = context, !context.isEmpty else { return nil }
@@ -468,245 +508,65 @@ extension PolishProfile {
     }
     
     func systemPrompt(context: PolishContext) -> String {
-        // Build locale with region for better localization
-        // Build context hints gracefully - handle cases where app doesn't share text
-        let contextHint: String
-        switch (context.existingText, context.conversationHint) {
-        case (let text?, _) where !(text.isEmpty):
-            // Both existing text and conversation hint available
-            if let hint = context.conversationHint, !hint.isEmpty {
-                contextHint = "\n\nExisting text in field (last 300 chars):\n```\n\(String(text.suffix(300)))\n```\n\nRecent context:\n```\n\(hint)\n```\n\n"
-            } else {
-                contextHint = "\n\nExisting text in field (last 300 chars):\n```\n\(String(text.suffix(300)))\n```\n\n"
-            }
-        case (_, let hint?) where !(hint.isEmpty):
-            // Only conversation hint available (e.g., terminal output)
-            contextHint = "\n\nRecent context for reference:\n```\n\(hint)\n```\n\n"
-        case (nil, nil), (_, _):
-            // No context available — prompt still works without it
-            contextHint = ""
-        }
-        
-        let base = "Output ONLY the polished text. No explanations, no quotes, no preamble."
+        let contextHint = buildContextHint(existingText: context.existingText, conversationHint: context.conversationHint)
         
         switch self {
         case .terminal:
-            // Detect current binary/shell from terminal context if available
             let currentBinary = detectTerminalBinary(from: context.conversationHint)
-            let binaryContext = currentBinary != nil ? "Current shell/command: \(currentBinary ?? "unknown")\n\n" : ""
-            
-            return """
-            \(base)
-            \(binaryContext)You are polishing speech-to-text for terminal input. CRITICAL: Preserve the user's original intent and meaning.
-            
-            LANGUAGE PRESERVATION - CRITICAL:
-            - NEVER translate or transliterate ANY part of the input
-            - Output must be in the EXACT SAME script/languages as the input
-            - If input is Chinese, output MUST remain Chinese (do NOT convert to pinyin)
-            - If input has mixed scripts (e.g., "广东移动 token plan"), keep ALL scripts intact
-            - Brand/company names: KEEP ORIGINAL CHARACTERS (e.g., 广东移动 stays 广东移动)
-            
-            COMMAND DETECTION RULES:
-            1. NEVER convert descriptions, questions, or meta-commentary into commands
-            2. ONLY format as a command if ALL of these are true:
-               - User uses clear imperative verbs: "run", "execute", "build", "test", "install", "create", "delete"
-               - The phrase is a direct instruction, NOT a question or observation
-               - There is NO ambiguity about intent
-            3. ALWAYS keep as natural language if:
-               - User is asking "why", "what", "how", "where", "when"
-               - User is describing something: "I'm looking for", "I need to find", "I want to see"
-               - User is testing or commenting: "check if", "see if", "test whether"
-               - User mentions the tool itself: "the polish", "this feature", "the app"
-            4. NEVER add: markdown, backticks, quotes, or punctuation at the end
-            5. When in doubt, keep the original wording
-            
-            Examples:
-            - "run the tests" → run the tests
-            - "build the project" → build the project  
-            - "广东移动套餐" → 广东移动套餐 (KEEP CHINESE, do not transliterate!)
-            - "check if the polish is working" → check if the polish is working (NOT a command!)
-            - "why is the build failing" → why is the build failing (question, keep as-is)
-            
-            \(contextHint)
-            """
+            return buildPrompt(
+                role: "You are polishing speech-to-text for terminal input. Shell: \(currentBinary ?? "unknown").",
+                rule: "Terminal: imperative verbs (run/build/test) → command phrasing; questions stay natural; no backticks or markdown.",
+                contextHint: contextHint
+            )
             
         case .codeComment:
-            return """
-            \(base)
-            You are polishing speech-to-text for a code comment or docstring.
-            
-            LANGUAGE PRESERVATION - CRITICAL:
-            - NEVER translate or transliterate ANY part of the input
-            - Output must be in the EXACT SAME script/languages as the input
-            - If input is Chinese, output MUST remain Chinese (do NOT convert to pinyin)
-            - Preserve ALL technical terms, variable names, and acronyms exactly as spoken
-            
-            COMMENT POLISHING RULES:
-            - Write as a concise technical comment, not a full sentence
-            - Remove filler words and verbal artifacts only
-            - Do NOT add comment markers (// or #) — just the text content
-            - Fix grammar but keep it terse
-            - Do NOT expand or add content that wasn't spoken
-            - When in doubt, keep the original wording
-            
-            Examples:
-            - "check if user is logged in" → check if user is logged in
-            - "this function handles the api retry logic with exponential backoff" → this function handles the API retry logic with exponential backoff
-            - "todo fix the null pointer issue" → TODO fix the null pointer issue
-            \(contextHint)
-            """
+            return buildPrompt(
+                role: "You are polishing speech-to-text for a code comment.",
+                rule: "Code comment: concise technical comment; remove filler words only; no // or # markers; preserve identifiers, variable names, acronyms.",
+                contextHint: contextHint
+            )
             
         case .codeEditor:
-            return """
-            \(base)
-            You are polishing speech-to-text for a code editor (likely a doc, readme, or commit message).
-            
-            LANGUAGE PRESERVATION - CRITICAL:
-            - NEVER translate or transliterate ANY part of the input
-            - Output must be in the EXACT SAME script/languages as the input
-            - If input is Chinese, output MUST remain Chinese (do NOT convert to pinyin)
-            - Preserve ALL technical terms, identifiers, file paths, and acronyms exactly
-            
-            EDITING RULES:
-            - Fix grammar and punctuation only
-            - Remove filler words ("um", "uh", "like")
-            - Keep it concise — this is likely a commit message or inline note
-            - Do NOT rewrite or paraphrase the content
-            - Keep roughly the same length as the input
-            - When in doubt, keep the original wording
-            
-            Examples:
-            - "fix the login bug" → fix the login bug
-            - "update api endpoint to use v2" → update API endpoint to use v2
-            - "add error handling for network requests" → add error handling for network requests
-            \(contextHint)
-            """
+            return buildPrompt(
+                role: "You are polishing speech-to-text for a code editor (docs, README, commit messages).",
+                rule: "Code editor: fix grammar and punctuation only; remove filler words (um, uh); keep concise; preserve identifiers, paths, acronyms.",
+                contextHint: contextHint
+            )
             
         case .tradingTerminal:
-            return """
-            \(base)
-            You are polishing speech-to-text for trading terminal input (stock codes, order parameters, or commands).
-            
-            LANGUAGE PRESERVATION - CRITICAL:
-            - NEVER translate or transliterate stock names, company names, or market terms
-            - Output must be in the EXACT SAME script/languages as the input
-            - If input is Chinese, output MUST remain Chinese (do NOT convert to pinyin)
-            - Preserve ALL stock codes, ticker symbols, prices, and quantities EXACTLY as spoken
-            - Company names: KEEP ORIGINAL FORM (e.g., 贵州茅台 stays 贵州茅台，不要翻译为 Kweichow Moutai)
-            
-            TRADING INSTRUCTION RULES:
-            - Convert spoken order instructions to standard format ONLY when explicit:
-              * "buy 100 shares of TSLA at market" → BUY 100 TSLA MARKET
-              * "sell 50 AAPL at 150" → SELL 50 AAPL LIMIT 150
-            - Remove filler words entirely: "um", "uh", "like", "so"
-            - Handle both English and Chinese trading terminology:
-              * "买入" → BUY, "卖出" → SELL
-              * "市价" → MARKET, "限价" → LIMIT
-            - Keep numbers and symbols exact - no rounding or formatting changes
-            - Do NOT add or remove any trading parameters
-            - When uncertain, keep the original spoken form
-            \(contextHint)
-            """
+            return buildPrompt(
+                role: "You are polishing speech-to-text for trading terminal input (stock codes, order parameters).",
+                rule: "Trading: explicit orders → 'BUY 100 TSLA MARKET'; 买入→BUY, 卖出→SELL, 市价→MARKET, 限价→LIMIT; keep codes, prices, quantities exact.",
+                contextHint: contextHint
+            )
             
         case .chatMessaging:
-            return """
-            \(base)
-            You are polishing speech-to-text for a chat message (Slack, Discord, Telegram, etc).
-            
-            LANGUAGE PRESERVATION - CRITICAL:
-            - NEVER translate or transliterate ANY part of the input
-            - Output must be in the EXACT SAME script/languages as the input
-            - If input is Chinese, output MUST remain Chinese (do NOT convert to pinyin)
-            - If input has mixed scripts, keep ALL scripts intact
-            - Preserve ALL brand names, usernames, links, and technical terms exactly
-            
-            CHAT POLISHING RULES:
-            - Keep it natural and conversational
-            - Remove filler words ("um", "uh", "like") but keep casual phrasing
-            - Light punctuation only — no over-formal sentences
-            - Preserve intent and tone, including humor, sarcasm, or emphasis
-            - Short messages should stay short
-            - Do NOT formalize or rewrite the content
-            - Keep emojis or emoticons if mentioned
-            - When in doubt, keep the original wording
-            \(contextHint)
-            """
+            return buildPrompt(
+                role: "You are polishing speech-to-text for a chat message (Slack, Discord, WhatsApp).",
+                rule: "Chat: conversational and natural; light punctuation; remove filler words (um, uh); keep tone, humor, sarcasm, emojis.",
+                contextHint: contextHint
+            )
             
         case .emailFormal:
-            return """
-            \(base)
-            You are polishing speech-to-text for professional email content.
-            
-            LANGUAGE PRESERVATION - CRITICAL:
-            - NEVER translate or transliterate ANY part of the input
-            - Output must be in the EXACT SAME script/languages as the input
-            - If input is Chinese, output MUST remain Chinese (do NOT convert to pinyin)
-            - Preserve ALL names, email addresses, phone numbers, dates, and company names exactly
-            - Brand/company names: KEEP ORIGINAL FORM in the language used by speaker
-            
-            EMAIL POLISHING RULES:
-            - Full grammatical sentences with proper punctuation
-            - Professional tone — neither too stiff nor too casual
-            - Remove all filler words and verbal artifacts
-            - Expand contractions if formal context (don't → do not) [for English only]
-            - Do NOT add or remove any substantive content
-            - Keep the same level of detail as the original
-            - When in doubt, keep the original wording
-            \(contextHint)
-            """
+            return buildPrompt(
+                role: "You are polishing speech-to-text for a professional email.",
+                rule: "Email: full grammatical sentences, proper punctuation, professional tone; expand contractions (don't → do not); keep names, emails, dates exact.",
+                contextHint: contextHint
+            )
             
         case .searchQuery:
-            return """
-            \(base)
-            You are polishing speech-to-text for a search query.
-            
-            LANGUAGE PRESERVATION - CRITICAL:
-            - NEVER translate or transliterate ANY part of the input
-            - Output must be in the EXACT SAME script/languages as the input
-            - If input is Chinese, output MUST remain Chinese (do NOT convert to pinyin)
-            - If input has mixed scripts (e.g., "广东移动 token plan"), keep ALL scripts intact
-            - Brand/company names: KEEP ORIGINAL CHARACTERS (e.g., 广东移动 stays 广东移动，不要改成 gd mobile)
-            
-            SEARCH QUERY FORMATTING:
-            - Strip to essential keywords only
-            - Remove articles, prepositions, filler words (um, uh, like, you know)
-            - No punctuation (remove periods, commas at end)
-            - Preserve technical terms, product names, and version numbers exactly
-            - Do NOT add concepts that weren't mentioned
-            - Keep capitalization of proper nouns/brand names as they appear
-            
-            Examples:
-            - "how do I find the best coffee shops near me" → best coffee shops near me
-            - "typescript compiler error ts2345" → typescript compiler error ts2345
-            - "react useeffect cleanup function" → react useeffect cleanup function
-            - "广东移动套餐" → 广东移动套餐 (KEEP CHINESE, do not change to pinyin!)
-            - "广东移动 token plan" → 广东移动 token plan (keep mixed script intact!)
-            """
+            return buildPrompt(
+                role: "You are polishing speech-to-text for a search query.",
+                rule: "Search: essential keywords only; remove articles, prepositions, filler words; no trailing punctuation; keep technical terms, product names, versions exact.",
+                contextHint: contextHint
+            )
             
         case .general:
-            return """
-            \(base)
-            You are polishing speech-to-text output into clean, readable text.
-            
-            LANGUAGE PRESERVATION - CRITICAL:
-            - NEVER translate or transliterate ANY part of the input
-            - Output must be in the EXACT SAME script/languages as the input
-            - If input is Chinese, output MUST remain Chinese (do NOT convert to pinyin)
-            - If input has mixed scripts (e.g., "广东移动 token plan"), keep ALL scripts intact
-            - Brand/company names: KEEP ORIGINAL CHARACTERS (e.g., 广东移动 stays 广东移动，不要改成 gd mobile)
-            
-            POLISHING RULES:
-            - Fix grammar, punctuation, and capitalization (for Latin scripts only)
-            - Remove filler words ("um", "uh", "you know", "like")
-            - Preserve the speaker's intent and voice
-            - Do not add content that wasn't spoken
-            - Keep roughly the same length as the input
-            - Do NOT paraphrase or rewrite sentences
-            - Preserve all names, places, numbers, and technical terms exactly
-            - When in doubt, keep the original wording
-            
-            \(contextHint)
-            """
+            return buildPrompt(
+                role: "You are polishing speech-to-text into clean readable text.",
+                rule: "General: fix grammar and punctuation; remove filler words (um, uh, like); preserve intent and voice; keep names, places, numbers, terms exact.",
+                contextHint: contextHint
+            )
         }
     }
 }

@@ -11,8 +11,9 @@ struct SettingsView: View {
     @State private var showLLMApiKey: Bool = false
     @State private var llmBaseURLInput: String = ""
     
-    // Accessibility permission state
+    // Accessibility and microphone info state
     @State private var hasAccessibilityPermission: Bool = AccessibilityService.shared.hasAccessibilityPermission()
+    @State private var currentMicrophoneName: String? = nil
     
     var body: some View {
         Form {
@@ -25,6 +26,12 @@ struct SettingsView: View {
                 .onChange(of: settings.backendType) { newValue in
                     settings.apiURL = newValue.defaultURL
                     apiKeyInput = settings.apiKey ?? ""
+                }
+                
+                if settings.backendType == .apple {
+                    Text("On-device streaming recognition by Apple. Live text appears while you speak — no API key or uploads.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
             } header: {
                 Text("ASR Service")
@@ -258,15 +265,101 @@ struct SettingsView: View {
                 Text(settings.llmEnabled ? "Polished transcription will be injected instead of the raw ASR output." : "Optional: Use an LLM to improve transcription quality.")
                     .font(.caption)
             }
+            
+            // MARK: - Debug Section
+            Section {
+                Toggle("Keep audio recordings", isOn: $settings.keepRecordings)
+                    .onChange(of: settings.keepRecordings) { _ in
+                        // Refresh count when toggle changes to avoid stale display
+                        settings.refreshDebugRecordingsCount()
+                    }
+                
+                if settings.keepRecordings {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Stored Recordings:")
+                                .fontWeight(.medium)
+                            Spacer()
+                            Text("\(settings.debugRecordingsCount)")
+                                .font(.system(.body, design: .monospaced))
+                                .foregroundColor(settings.debugRecordingsCount > 0 ? .primary : .secondary)
+                                .frame(width: 30)
+                        }
+                        
+                        HStack(spacing: 8) {
+                            Button("Clear All") {
+                                settings.clearDebugRecordings()
+                            }
+                            .disabled(settings.debugRecordingsCount == 0)
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            
+                            Button(action: {
+                                NSWorkspace.shared.open(settings.debugRecordingsURL)
+                            }) {
+                                Label("Open Folder", systemImage: "folder.fill")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .disabled(settings.debugRecordingsCount == 0)
+                            
+                            Button(action: {
+                                settings.refreshDebugRecordingsCount()
+                            }) {
+                                Image(systemName: "arrow.clockwise")
+                            }
+                            .buttonStyle(.borderless)
+                            .controlSize(.small)
+                        }
+                        
+                        if settings.debugRecordingsCount > 0 {
+                            HStack {
+                                Image(systemName: "info.circle")
+                                    .foregroundColor(.secondary)
+                                Text("Recordings are stored in the temporary directory and will be deleted on app restart if this option is disabled.")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+                
+                HStack {
+                    Label("Current Microphone", systemImage: "mic.fill")
+                        .foregroundColor(settings.keepRecordings ? .secondary : .primary)
+                    Spacer()
+                    Text(currentMicrophoneName ?? "Detecting...")
+                        .foregroundColor(.secondary)
+                        .truncationMode(.tail)
+                        .lineLimit(1)
+                }
+                
+                Button(action: {
+                    currentMicrophoneName = MicrophonePermissionService.shared.currentMicrophoneName()
+                }) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.caption)
+                }
+                .buttonStyle(.borderless)
+                .help("Refresh microphone info")
+            } header: {
+                Text("Debug & Diagnostics")
+            } footer: {
+                Text("Debug tools for troubleshooting recording issues")
+                    .font(.caption)
+            }
         }
         .formStyle(.grouped)
         .padding()
-        .frame(width: 500, height: 550)
+        .frame(width: 480)
         .onAppear {
             apiKeyInput = settings.apiKey ?? ""
             llmApiKeyInput = settings.llmAPIKey ?? ""
             llmBaseURLInput = settings.llmBaseURL ?? ""
             hasAccessibilityPermission = AccessibilityService.shared.hasAccessibilityPermission()
+            currentMicrophoneName = MicrophonePermissionService.shared.currentMicrophoneName()
+            settings.refreshDebugRecordingsCount()
         }
         .onChange(of: settings.llmBaseURL) { newValue in
             llmBaseURLInput = newValue ?? ""

@@ -18,8 +18,6 @@ final class StatusBarController: NSObject {
     var onQuit: (() -> Void)?
     var onSettings: (() -> Void)?
     var onToggleLoginItem: (() -> Void)?
-    var onStartRecording: (() -> Void)?
-    var onStopRecording: (() -> Void)?
     
     override init() {
         super.init()
@@ -40,17 +38,6 @@ final class StatusBarController: NSObject {
     
     private func setupMenu() {
         menu = NSMenu()
-        
-        // Recording controls
-        let recordItem = NSMenuItem(title: "Start Recording", action: #selector(startRecordingClicked), keyEquivalent: "r")
-        recordItem.target = self
-        menu?.addItem(recordItem)
-        
-        let stopItem = NSMenuItem(title: "Stop Recording", action: #selector(stopRecordingClicked), keyEquivalent: "s")
-        stopItem.target = self
-        menu?.addItem(stopItem)
-        
-        menu?.addItem(NSMenuItem.separator())
         
         let settingsItem = NSMenuItem(title: "Settings...", action: #selector(settingsClicked), keyEquivalent: ",")
         settingsItem.target = self
@@ -105,16 +92,6 @@ final class StatusBarController: NSObject {
     @objc private func settingsClicked() {
         logger.debug("Status bar: Settings clicked")
         onSettings?()
-    }
-    
-    @objc private func startRecordingClicked() {
-        logger.info("Status bar: Start recording clicked")
-        onStartRecording?()
-    }
-    
-    @objc private func stopRecordingClicked() {
-        logger.info("Status bar: Stop recording clicked")
-        onStopRecording?()
     }
     
     @objc private func toggleLoginItemClicked() {

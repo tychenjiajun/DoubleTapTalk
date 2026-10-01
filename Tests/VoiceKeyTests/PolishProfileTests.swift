@@ -200,9 +200,9 @@ final class PolishProfileTests: XCTestCase {
         let context = createPolishContext(profile: .terminal)
         let prompt = PolishProfile.terminal.systemPrompt(context: context)
         
-        XCTAssertTrue(prompt.contains("shell command"), "Terminal prompt should mention shell commands")
-        XCTAssertTrue(prompt.contains("lowercase"), "Terminal prompt should mention lowercase")
-        XCTAssertTrue(prompt.contains("mkdir"), "Terminal prompt should mention mkdir example")
+        XCTAssertTrue(prompt.contains("terminal input"), "Terminal prompt should mention terminal input")
+        XCTAssertTrue(prompt.contains("Terminal:"), "Terminal prompt should mention command formatting rules")
+        XCTAssertTrue(prompt.contains("no backticks or markdown"), "Terminal prompt should forbid markdown")
         XCTAssertTrue(prompt.contains("Output ONLY"), "All prompts should require output-only response")
     }
     
@@ -211,7 +211,7 @@ final class PolishProfileTests: XCTestCase {
         let prompt = PolishProfile.codeComment.systemPrompt(context: context)
         
         XCTAssertTrue(prompt.contains("code comment"), "Code comment prompt should mention comments")
-        XCTAssertTrue(prompt.contains("Do NOT add comment markers"), "Should instruct not to add markers")
+        XCTAssertTrue(prompt.contains("no // or # markers"), "Should instruct not to add markers")
         XCTAssertTrue(prompt.contains("concise"), "Should emphasize conciseness")
     }
     
@@ -220,8 +220,8 @@ final class PolishProfileTests: XCTestCase {
         let prompt = PolishProfile.chatMessaging.systemPrompt(context: context)
         
         XCTAssertTrue(prompt.contains("conversational"), "Chat prompt should mention conversational tone")
-        XCTAssertTrue(prompt.contains("casual"), "Chat prompt should allow casual phrasing")
-        XCTAssertTrue(prompt.contains("Short messages"), "Should handle short messages")
+        XCTAssertTrue(prompt.contains("conversational and natural"), "Should keep messages natural")
+        XCTAssertTrue(prompt.contains("emojis"), "Should preserve emojis")
     }
     
     func testEmailFormalSystemPrompt() {
@@ -230,7 +230,7 @@ final class PolishProfileTests: XCTestCase {
         
         XCTAssertTrue(prompt.contains("professional"), "Email prompt should mention professional tone")
         XCTAssertTrue(prompt.contains("proper punctuation"), "Should require proper punctuation")
-        XCTAssertTrue(prompt.contains("Expand contractions"), "Should mention expanding contractions")
+        XCTAssertTrue(prompt.contains("expand contractions"), "Should mention expanding contractions")
     }
     
     func testTradingTerminalSystemPrompt() {
@@ -250,8 +250,8 @@ final class PolishProfileTests: XCTestCase {
         let prompt = PolishProfile.searchQuery.systemPrompt(context: context)
         
         XCTAssertTrue(prompt.contains("keywords"), "Search prompt should mention keywords")
-        XCTAssertTrue(prompt.contains("No punctuation"), "Should require no punctuation")
-        XCTAssertTrue(prompt.contains("Lowercase"), "Should require lowercase")
+        XCTAssertTrue(prompt.contains("no trailing punctuation"), "Should require no trailing punctuation")
+        XCTAssertTrue(prompt.contains("essential keywords"), "Should strip to essential keywords")
     }
     
     func testGeneralSystemPrompt() {

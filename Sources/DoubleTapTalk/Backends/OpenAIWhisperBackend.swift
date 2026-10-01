@@ -1,28 +1,29 @@
 import Foundation
 
 struct OpenAIWhisperBackend: ASRBackend {
-    let name = "OpenAI Whisper"
+    let name: String
     private let apiKey: String?
     private let apiURL: String
     private let logger = FileLogger.shared
     
-    init(apiKey: String?, apiURL: String) {
+    init(name: String = "OpenAI Whisper", apiKey: String?, apiURL: String) {
+        self.name = name
         self.apiKey = apiKey
         self.apiURL = apiURL
     }
     
     func transcribe(audioURL: URL, language: String?, model: String?) async throws -> ASRResult {
-        logger.info("OpenAI Whisper: Starting transcription")
+        logger.info("\(name): Starting transcription")
         logger.debug("API URL: \(apiURL)")
         logger.debug("Model: \(model ?? "whisper-1"), Language: \(language ?? "auto")")
         
         guard let apiKey = apiKey, !apiKey.isEmpty else {
-            logger.error("OpenAI Whisper: No API key configured")
+            logger.error("\(name): No API key configured")
             throw ASRError.noAPIKey
         }
         
         guard let url = URL(string: apiURL) else {
-            logger.error("OpenAI Whisper: Invalid API URL: \(apiURL)")
+            logger.error("\(name): Invalid API URL: \(apiURL)")
             throw ASRError.invalidURL
         }
         
@@ -65,20 +66,20 @@ struct OpenAIWhisperBackend: ASRBackend {
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
         
         request.httpBody = body
-        logger.debug("Sending request to OpenAI API...")
+        logger.debug("Sending request to \(name) API...")
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
-            logger.error("OpenAI Whisper: Invalid response type")
+            logger.error("\(name): Invalid response type")
             throw ASRError.invalidResponse
         }
         
-        logger.debug("OpenAI API response status: \(httpResponse.statusCode)")
+        logger.debug("\(name) API response status: \(httpResponse.statusCode)")
         
         guard httpResponse.statusCode == 200 else {
             let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-            logger.error("OpenAI Whisper API error (\(httpResponse.statusCode)): \(errorMessage)")
+            logger.error("\(name) API error (\(httpResponse.statusCode)): \(errorMessage)")
             throw ASRError.serverError(httpResponse.statusCode, errorMessage)
         }
         
@@ -89,7 +90,7 @@ struct OpenAIWhisperBackend: ASRBackend {
         }
         
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            logger.error("OpenAI Whisper: Failed to parse response JSON")
+            logger.error("\(name): Failed to parse response JSON")
             throw ASRError.invalidResponse
         }
         
@@ -105,12 +106,12 @@ struct OpenAIWhisperBackend: ASRBackend {
         }
         
         guard let transcript = text, !transcript.isEmpty else {
-            logger.error("OpenAI Whisper: No transcription text found in response")
+            logger.error("\(name): No transcription text found in response")
             logger.error("Full JSON keys: \(json.keys.joined(separator: ", "))")
             throw ASRError.transcriptionFailed("Empty response from API")
         }
         
-        logger.info("OpenAI Whisper: Transcription successful (\(transcript.count) chars)")
+        logger.info("\(name): Transcription successful (\(transcript.count) chars)")
         return ASRResult(
             text: transcript,
             language: json["language"] as? String,

@@ -34,6 +34,8 @@
     <string>DoubleTapTalk needs access to your microphone to record audio for speech-to-text transcription.</string>
     <key>NSAccessibilityUsageDescription</key>
     <string>DoubleTapTalk needs accessibility permission to inject transcribed text into other applications.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>DoubleTapTalk uses on-device speech recognition to convert your speech to text. Audio is processed on your Mac and never uploaded.</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
 </dict>

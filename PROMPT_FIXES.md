@@ -1,5 +1,109 @@
 # Prompt Fixes - Preventing LLM Hallucinations and Contradictions
 
+---
+
+## Bug Fix: Microphone Permission Not Requested on Start Recording
+
+### Date: 2026-04-13
+
+### Symptoms
+- User grants microphone permission in System Settings
+- Clicking "Start Recording" from menu doesn't actually enable microphone
+- No clear error message about permission status
+- Recording appears to start but no audio is captured
+
+### Root Cause
+`AVAudioRecorder.record()` was called without explicitly checking or requesting microphone permission first. On macOS:
+1. `AVAudioRecorder` should auto-prompt for permission on first use
+2. But if permission was previously denied or in an inconsistent state, `record()` may fail silently
+3. No clear feedback to user about permission status
+
+### The Fix
+
+**New File: `Services/MicrophonePermissionService.swift`**
+```swift
+final class MicrophonePermissionService {
+    static let shared = MicrophonePermissionService()
+    
+    func hasMicrophonePermission() -> Bool {
+        let status = AVCaptureDevice.authorizationStatus(for: .audio)
+        return status == .authorized
+    }
+    
+    func requestPermission() async -> Bool {
+        // Shows system permission dialog if needed
+        return await AVCaptureDevice.requestAccess(for: .audio)
+    }
+}
+```
+
+**Updated: `Services/AudioRecorder.swift`**
+```swift
+func startRecording() async throws {
+    // Check and request microphone permission BEFORE recording
+    if !permissionService.hasMicrophonePermission() {
+        let granted = await permissionService.requestPermission()
+        if !granted {
+            throw NSError(
+                domain: "AudioRecorder",
+                code: 3,
+                userInfo: [NSLocalizedDescriptionKey: "Microphone permission denied. Please grant in System Settings > Privacy & Security > Microphone"]
+            )
+        }
+    }
+    // ... continue with recording
+}
+```
+
+**Updated: `App/DoubleTapTalkApp.swift`**
+```swift
+// Check permission at launch
+if MicrophonePermissionService.shared.hasMicrophonePermission() {
+    logger.info("Microphone permission granted")
+} else {
+    logger.warning("Microphone permission not granted — recording will prompt for permission")
+}
+
+// Updated startRecording to call async method
+private func startRecording() {
+    Task {
+        do {
+            try await audioRecorder.startRecording()
+            // ...
+        } catch {
+            // Shows clear error to user
+        }
+    }
+}
+```
+
+### Lessons Learned
+
+1. **Explicit Permission Checks**: Always check permission state explicitly before using protected resources, even if the API claims to auto-prompt.
+
+2. **Clear Error Messages**: When permission is denied, provide actionable guidance ("Go to System Settings > Privacy & Security > Microphone").
+
+3. **Async Permission Requests**: macOS permission dialogs are async - use `async/await` pattern for clean handling.
+
+4. **Early Status Logging**: Log permission status at app launch so users know the current state before attempting to record.
+
+5. **Consistent Pattern**: Follow the same pattern as `AccessibilityService` for permission handling.
+
+### Testing Checklist
+
+- [ ] Fresh install: Permission dialog appears on first "Start Recording" click
+- [ ] Permission granted: Recording starts immediately
+- [ ] Permission denied: Clear error message shown, user directed to System Settings
+- [ ] Permission granted after denial: Recording works after user grants in Settings
+- [ ] Hotkey trigger: Same permission flow works for double-tap Control hotkey
+
+### Files Changed
+- `Sources/DoubleTapTalk/Services/MicrophonePermissionService.swift` (NEW)
+- `Sources/DoubleTapTalk/Services/AudioRecorder.swift` (updated to async + permission check)
+- `Sources/DoubleTapTalk/App/DoubleTapTalkApp.swift` (updated startRecording to async)
+
+---
+
 ## Root Cause Analysis
 
 ### Problem Discovered (2026-04-08)

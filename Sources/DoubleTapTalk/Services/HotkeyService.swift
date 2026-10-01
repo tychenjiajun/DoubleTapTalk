@@ -206,16 +206,11 @@ final class HotkeyService {
     }
     
     private func startHealthCheck() {
-        healthCheckTimer?.invalidate()
-        healthCheckTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+        healthCheckTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
             guard let self = self else { return }
-            if self.isTapActive {
-                self.logger.debug("Hotkey health check: Tap is active, recording state: \(self.isRecording)")
-            } else {
-                self.logger.error("Hotkey health check: Tap is NOT active!")
-                DispatchQueue.main.async {
-                    self.start()
-                }
+            if !self.isTapActive {
+                self.logger.error("Event tap inactive, attempting recovery")
+                DispatchQueue.main.async { self.start() }
             }
         }
         RunLoop.current.add(healthCheckTimer!, forMode: .common)

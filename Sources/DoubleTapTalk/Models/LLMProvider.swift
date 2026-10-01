@@ -50,18 +50,29 @@ struct LLMSettings: Codable {
         model: "gpt-4o-mini",
         temperature: 0.3,
         systemPrompt: """
-        Polish and improve the following transcribed text while preserving its original meaning:
-        - Fix punctuation and grammar
-        - Improve clarity and readability
-        - Maintain natural language flow
-        - Keep technical terms intact
-        - Return only the polished text without any explanations
-        
-        Do not add or remove content from the original message.
+        Polish this transcribed text conservatively: fix obvious speech-recognition errors and punctuation only. Never rewrite, add, or translate — keep the original language. Output only the polished text.
         """,
         baseURL: nil,
         timeout: 5.0,
         pinnedProfile: nil,
         useAppSpecificPolish: true
     )
+    
+    /// Builds an LLMSettings snapshot from the global app settings (DRY:
+    /// single source for the polish configuration used by every pipeline).
+    static func current() -> LLMSettings {
+        let settings = DoubleTapTalkSettings.shared
+        return LLMSettings(
+            enabled: settings.llmEnabled,
+            provider: settings.llmProvider,
+            apiKey: settings.llmAPIKey,
+            model: settings.llmModel,
+            temperature: settings.llmTemperature,
+            systemPrompt: settings.llmSystemPrompt,
+            baseURL: settings.llmBaseURL,
+            timeout: settings.llmTimeout,
+            pinnedProfile: settings.pinnedPolishProfile,
+            useAppSpecificPolish: settings.useAppSpecificPolish
+        )
+    }
 }

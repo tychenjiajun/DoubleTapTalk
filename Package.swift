@@ -14,10 +14,10 @@ let package = Package(
             path: "Sources/DoubleTapTalk",
             sources: [
                 "App/DoubleTapTalkApp.swift",
-                "Backends/GroqBackend.swift",
+                "Backends/AppleSpeechBackend.swift",
+                "Backends/DashscopeASRBackend.swift",
                 "Backends/LocalWhisperBackend.swift",
                 "Backends/OpenAIWhisperBackend.swift",
-                "Backends/DashscopeASRBackend.swift",
                 "Models/ASRBackend.swift",
                 "Models/LLMProvider.swift",
                 "Models/PolishModels.swift",
@@ -28,10 +28,16 @@ let package = Package(
                 "Services/HotkeyService.swift",
                 "Services/KeychainService.swift",
                 "Services/LLMService.swift",
+                "Services/MicrophonePermissionService.swift",
+                "Services/PolishProcessor.swift",
                 "Services/TextInjectionService.swift",
                 "Views/SettingsView.swift",
                 "Views/SettingsWindowController.swift",
-                "Views/StatusBarController.swift"
+                "Views/StatusBarController.swift",
+                "Views/Overlay/OverlayMetrics.swift",
+                "Views/Overlay/WaveformAnimator.swift",
+                "Views/Overlay/WaveformView.swift",
+                "Views/Overlay/RecordingOverlayPanel.swift"
             ],
             resources: [],
             linkerSettings: [
@@ -42,8 +48,11 @@ let package = Package(
                 .linkedFramework("Security"),
                 .linkedFramework("ServiceManagement")
             ]
+        ),
+        .testTarget(
+            name: "DoubleTapTalkTests",
+            dependencies: ["DoubleTapTalk"],
+            path: "Tests/VoiceKeyTests"
         )
-        // Note: Unit tests require Xcode project due to XCTest framework dependencies
-        // Tests are available in Tests/DoubleTapTalkTests/ and can be run via Xcode
     ]
 )

@@ -140,53 +140,11 @@ final class AccessibilityService {
         return nil
     }
     
-    /// Capture context from an application's focused element and populate FocusedElementInfo
-    /// - Parameter app: The target application
-    /// - Returns: FocusedElementInfo with role and value, or nil if unavailable
-    func captureFocusedElementInfo(from app: NSRunningApplication) -> (role: String?, value: String?) {
+    /// Capture context from an application's focused element
+    func captureFocusedElementInfo(from app: NSRunningApplication) -> FocusedElementInfo? {
         let pid = app.processIdentifier
-        
         let axApp = AXUIElementCreateApplication(pid)
         
-        // Get focused element
-        var focusedRef: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(axApp, kAXFocusedUIElementAttribute as CFString, &focusedRef) == .success,
-              let focused = focusedRef else { return (nil, nil) }
-        
-        let element = focused as! AXUIElement
-        
-        // Get role
-        var roleRef: CFTypeRef?
-        let role: String?
-        if AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleRef) == .success,
-           let r = roleRef as? String {
-            role = r
-        } else {
-            role = nil
-        }
-        
-        // Get value
-        var valueRef: CFTypeRef?
-        let value: String?
-        if AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &valueRef) == .success,
-           let v = valueRef as? String {
-            value = v
-        } else {
-            value = nil
-        }
-        
-        return (role, value)
-    }
-    
-    /// Capture detailed context from an application's focused element
-    /// - Parameter app: The target application
-    /// - Returns: FocusedElementInfo struct, or nil if unavailable
-    func captureFocusedElementInfoDetailed(from app: NSRunningApplication) -> FocusedElementInfo? {
-        let pid = app.processIdentifier
-        
-        let axApp = AXUIElementCreateApplication(pid)
-        
-        // Get focused element
         var focusedRef: CFTypeRef?
         guard AXUIElementCopyAttributeValue(axApp, kAXFocusedUIElementAttribute as CFString, &focusedRef) == .success,
               let focused = focusedRef else { return nil }
@@ -203,18 +161,13 @@ final class AccessibilityService {
             role = "Unknown"
         }
         
-        // Get value - try multiple attributes
+        // Get value - try kAXValueAttribute, then kAXSelectedTextAttribute
         var value: String?
-        
-        // Try kAXValueAttribute first (text fields, text areas)
         var valueRef: CFTypeRef?
         if AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &valueRef) == .success,
            let v = valueRef as? String, !v.isEmpty {
             value = v
-        }
-        
-        // Fallback: kAXSelectedTextAttribute (gets selected/highlighted text)
-        if value == nil {
+        } else {
             var selectedRef: CFTypeRef?
             if AXUIElementCopyAttributeValue(element, kAXSelectedTextAttribute as CFString, &selectedRef) == .success,
                let selected = selectedRef as? String, !selected.isEmpty {

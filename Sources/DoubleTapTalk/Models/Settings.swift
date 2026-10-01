@@ -8,6 +8,22 @@ enum ASRBackendType: String, CaseIterable, Codable {
     case groq = "groq"
     case dashscope = "dashscope"
     case local = "local"
+    case apple = "apple"
+    
+    var requiresAPIKey: Bool {
+        switch self {
+        case .openAI, .groq, .dashscope: return true
+        case .local, .apple: return false
+        }
+    }
+    
+    /// Whether this backend streams live text while recording.
+    var isStreaming: Bool {
+        switch self {
+        case .apple: return true
+        default: return false
+        }
+    }
     
     var displayName: String {
         switch self {
@@ -15,13 +31,7 @@ enum ASRBackendType: String, CaseIterable, Codable {
         case .groq: return "Groq"
         case .dashscope: return "DashScope ASR"
         case .local: return "Local (whisper.cpp)"
-        }
-    }
-    
-    var requiresAPIKey: Bool {
-        switch self {
-        case .openAI, .groq, .dashscope: return true
-        case .local: return false
+        case .apple: return "Apple (On-Device)"
         }
     }
     
@@ -31,6 +41,7 @@ enum ASRBackendType: String, CaseIterable, Codable {
         case .groq: return "https://api.groq.com/openai/v1/audio/transcriptions"
         case .dashscope: return "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
         case .local: return "http://localhost:8080/v1/audio/transcriptions"
+        case .apple: return ""
         }
     }
 }
@@ -46,6 +57,8 @@ final class DoubleTapTalkSettings: ObservableObject {
         static let language = "ASRLanguage"
         static let model = "ASRModel"
         static let useLocalServer = "UseLocalServer"
+        // Debug recording keys
+        static let keepRecordings = "DebugKeepRecordings"
         // LLM Polishing keys
         static let llmEnabled = "LLMEnabled"
         static let llmProvider = "LLMProvider"
@@ -90,6 +103,46 @@ final class DoubleTapTalkSettings: ObservableObject {
             defaults.set(useLocalServer, forKey: Keys.useLocalServer)
         }
     }
+    
+    // MARK: - Debug Settings
+    
+    @Published var keepRecordings: Bool {
+        didSet {
+            defaults.set(keepRecordings, forKey: Keys.keepRecordings)
+            logger.info("Settings: Keep recordings \(keepRecordings ? "enabled" : "disabled")")
+        }
+    }
+    
+    var debugRecordingsURL: URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent("dtt_debug_recordings")
+    }
+    
+    @Published var debugRecordingsCount: Int = 0 {
+        didSet {
+            logger.debug("Settings: Debug recordings count updated to \(debugRecordingsCount)")
+        }
+    }
+    
+    func refreshDebugRecordingsCount() {
+        let newCount = calculateDebugRecordingsCount()
+        if newCount != debugRecordingsCount {
+            debugRecordingsCount = newCount
+        }
+    }
+    
+    private func calculateDebugRecordingsCount() -> Int {
+        guard let contents = try? FileManager.default.contentsOfDirectory(atPath: debugRecordingsURL.path) else { return 0 }
+        return contents.count
+    }
+    
+    func clearDebugRecordings() {
+        let count = debugRecordingsCount
+        try? FileManager.default.removeItem(at: debugRecordingsURL)
+        debugRecordingsCount = 0
+        logger.info("Settings: Cleared \(count) debug recordings")
+    }
+    
+    // MARK: - API Key
     
     var apiKey: String? {
         get {
@@ -158,13 +211,10 @@ final class DoubleTapTalkSettings: ObservableObject {
         }
     }
     
-    var llmAPIKey: String? {
-        get {
-            return defaults.string(forKey: "LLMAPIKey")
-        }
-        set {
-            defaults.set(newValue, forKey: "LLMAPIKey")
-            logger.info("Settings: LLM API key \(newValue != nil ? "saved" : "cleared")")
+    @Published var llmAPIKey: String? = nil {
+        didSet {
+            defaults.set(llmAPIKey, forKey: "LLMAPIKey")
+            logger.info("Settings: LLM API key \(llmAPIKey != nil ? "saved" : "cleared")")
         }
     }
     
@@ -200,11 +250,16 @@ final class DoubleTapTalkSettings: ObservableObject {
             self.model = defaults.string(forKey: Keys.model) ?? "whisper-large-v3-turbo"
         } else if backend == .dashscope {
             self.model = defaults.string(forKey: Keys.model) ?? "qwen3-asr-flash"
+        } else if backend == .apple {
+            self.model = defaults.string(forKey: Keys.model) ?? "SFSpeechRecognizer"
         } else {
             self.model = defaults.string(forKey: Keys.model) ?? "whisper.cpp"
         }
         
         self.useLocalServer = defaults.bool(forKey: Keys.useLocalServer)
+        
+        // Load debug settings
+        self.keepRecordings = defaults.bool(forKey: Keys.keepRecordings)
         
         // Load app-specific polish setting (must load before other LLM settings that may reference it)
         // Default to true for new installs, respect saved value for existing users
@@ -226,6 +281,8 @@ final class DoubleTapTalkSettings: ObservableObject {
         let timeoutValue = defaults.double(forKey: Keys.llmTimeout)
         self.llmTimeout = timeoutValue > 0.0 ? timeoutValue : 5.0
         self.llmSystemPrompt = defaults.string(forKey: Keys.llmSystemPrompt) ?? LLMSettings.default.systemPrompt
+        self.llmAPIKey = defaults.string(forKey: "LLMAPIKey")
+        self.refreshDebugRecordingsCount()
     }
     
     func reset() {

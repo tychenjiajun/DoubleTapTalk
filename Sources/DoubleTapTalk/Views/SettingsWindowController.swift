@@ -9,7 +9,7 @@ final class SettingsWindowController: NSWindowController {
         let window = NSWindow(contentViewController: hostingController)
         window.title = "DoubleTapTalk Settings"
         window.styleMask = [.titled, .closable]
-        window.setContentSize(NSSize(width: 450, height: 400))
+        window.setContentSize(NSSize(width: 480, height: 600))
         window.center()
         window.isReleasedWhenClosed = false
         

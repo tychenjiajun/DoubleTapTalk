@@ -109,7 +109,7 @@ final class LLMService {
         }
         
         // Wrap user content with profile-specific framing
-        let userContent = wrapUserContent(text, profile: profile)
+        let userContent = wrapUserContent(text)
         logger.debug("User content (polished): '\(userContent)'")
         
         let response = try await callLLM(
@@ -144,27 +144,8 @@ final class LLMService {
         return response
     }
     
-    private func wrapUserContent(_ text: String, profile: PolishProfile) -> String {
-        // Use neutral framing - the system prompt already establishes the context
-        // Avoid contradictory instructions like "Convert to X" when the prompt says "preserve original"
-        switch profile {
-        case .terminal:
-            return "Speech to polish: \(text)"
-        case .searchQuery:
-            return "Speech to polish: \(text)"
-        case .codeComment:
-            return "Speech to polish: \(text)"
-        case .codeEditor:
-            return "Speech to polish: \(text)"
-        case .tradingTerminal:
-            return "Speech to polish: \(text)"
-        case .chatMessaging:
-            return "Speech to polish: \(text)"
-        case .emailFormal:
-            return "Speech to polish: \(text)"
-        case .general:
-            return "Speech to polish: \(text)"
-        }
+    private func wrapUserContent(_ text: String) -> String {
+        return "Speech to polish: \(text)"
     }
     
     private func callLLM(
@@ -335,12 +316,19 @@ final class LLMService {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
+        // Google Gemini API requires system instruction to be separate from content
+        // Use system_instruction parameter instead of embedding it in user text
         let body: [String: Any] = [
             "contents": [
                 ["role": "user", "parts": [
-                    ["text": "\(systemPrompt)\n\nUser input: \(userContent)"]
+                    ["text": userContent]
                 ]]
             ],
+            "system_instruction": [
+                "parts": [
+                    ["text": systemPrompt]
+                ]
+            ] as [String: Any],
             "generationConfig": [
                 "temperature": 0.3
             ]

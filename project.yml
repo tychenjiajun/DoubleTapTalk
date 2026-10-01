@@ -24,7 +24,7 @@ targets:
       - Resources
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.jiajun.doubletaptalk.app
+        PRODUCT_BUNDLE_IDENTIFIER: com.jiajun.doubletaptalk
         INFOPLIST_FILE: Resources/Info.plist
         CODE_SIGN_ENTITLEMENTS: DoubleTapTalk.entitlements
         PRODUCT_NAME: DoubleTapTalk
