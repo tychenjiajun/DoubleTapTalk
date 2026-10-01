@@ -177,7 +177,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             FileLogger.shared.error("Apple recognition error: \(message)")
         }
         
-        try backend.start(language: DoubleTapTalkSettings.shared.language)
+        // Resolve on the main thread (TIS requires it) — when language is "auto",
+        // the active input method decides: Chinese IME → zh-CN, English → en-US.
+        let inputMethodLang = await MainActor.run {
+            InputMethodLanguage.currentLanguageCode()
+        }
+        logger.info("Input method language: \(inputMethodLang ?? "unknown")")
+        
+        try backend.start(language: DoubleTapTalkSettings.shared.language, inputMethodLanguage: inputMethodLang)
         appleSpeechBackend = backend
         
         await MainActor.run {
@@ -254,14 +261,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         
         await MainActor.run {
             if text.isEmpty {
-                recordingOverlay.dismiss()
+                recordingOverlay.updateText("未识别到语音")
             } else if wasChanged {
                 recordingOverlay.updateText("✨ \(text)")
             }
         }
         
-        if wasChanged {
-            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1s reveal
+        if wasChanged || text.isEmpty {
+            // Reveal the polish result (1s) or show the empty-result hint briefly (0.8s)
+            try? await Task.sleep(nanoseconds: text.isEmpty ? 800_000_000 : 1_000_000_000)
         }
         
         await MainActor.run {

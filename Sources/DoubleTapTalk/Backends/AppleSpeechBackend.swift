@@ -1,6 +1,7 @@
 import Foundation
 import Speech
 import AVFoundation
+import Carbon
 
 private let logger = FileLogger.shared
 
@@ -35,6 +36,21 @@ struct RecognitionTranscript {
     }
 }
 
+/// Reads the active keyboard input source's language (macOS TIS).
+/// This is the "input method" heuristic: if you're typing Pinyin, recognition
+/// should follow in Chinese; if the keyboard is ABC/US, recognition is English.
+/// NOTE: must be called on the main thread.
+enum InputMethodLanguage {
+    static func currentLanguageCode() -> String? {
+        guard let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue(),
+              let langs = TISGetInputSourceProperty(source, kTISPropertyInputSourceLanguages) else {
+            return nil
+        }
+        let languages = Unmanaged<CFArray>.fromOpaque(langs).takeUnretainedValue() as? [String]
+        return languages?.first
+    }
+}
+
 /// Maps the app's language codes ("auto", "zh", "en", ...) to the locale
 /// identifiers accepted by SFSpeechRecognizer (pure, testable).
 enum SpeechLocaleMapper {
@@ -48,20 +64,68 @@ enum SpeechLocaleMapper {
         "ko": "ko-KR",
     ]
 
-    static func locale(for languageCode: String?) -> Locale {
-        guard let code = languageCode, code != "auto" else {
-            return Locale.current
+    /// Dictation locales we can fall back to (a subset of SFSpeechRecognizer.supportedLocales()).
+    private static let fallbackCandidates = [
+        "en-US", "en-GB", "en-AU", "en-CA", "en-IN", "en-SG",
+        "zh-CN", "zh-HK", "zh-TW", "ja-JP", "ko-KR",
+        "es-ES", "fr-FR", "de-DE", "it-IT", "pt-BR", "ru-RU",
+    ]
+
+    static func locale(for languageCode: String?, inputMethodLanguage: String? = nil) -> Locale {
+        if let code = languageCode, code != "auto" {
+            if let identifier = supported[code] {
+                return Locale(identifier: identifier)
+            }
+            // Valid extended identifiers (e.g. "en-GB", "zh-Hant_TW") pass through
+            // so power users can use any locale SFSpeechRecognizer supports.
+            if code.contains("-") || code.contains("_") {
+                return Locale(identifier: code)
+            }
+            return bestLocale(identifier: code)
         }
-        if let identifier = supported[code] {
-            return Locale(identifier: identifier)
+        // "auto": the active input method decides (Chinese IME → Chinese,
+        // English keyboard → English); system locale is the fallback.
+        if let imLang = inputMethodLanguage, !imLang.isEmpty {
+            return bestLocale(identifier: imLang)
         }
-        // Valid extended identifiers (e.g. "en-GB", "zh-Hant_TW") pass through
-        // so power users can use any locale SFSpeechRecognizer supports. Garbage
-        // two-letter codes fall back to the system locale.
-        if code.contains("-") || code.contains("_") {
-            return Locale(identifier: code)
+        return bestLocale(for: Locale.current)
+    }
+
+    /// Maps a system locale to a REAL dictation locale. This is critical:
+    /// "auto" used to pass Locale.current straight through, which on machines
+    /// with mismatched language/region (e.g. "en_CN") made SFSpeechRecognizer
+    /// fail with a "Corrupt" error and transcribe nothing.
+    private static func bestLocale(for current: Locale) -> Locale {
+        let normalized = current.identifier.replacingOccurrences(of: "_", with: "-")
+        if fallbackCandidates.contains(normalized) {
+            return Locale(identifier: normalized)
         }
-        return Locale.current
+        guard let lang = (current.language.languageCode?.identifier.lowercased()) else {
+            return Locale(identifier: "en-US")
+        }
+        if let match = fallbackCandidates.first(where: { $0.hasPrefix(lang + "-") }) {
+            return Locale(identifier: match)
+        }
+        return lang == "zh" ? Locale(identifier: "zh-CN") : Locale(identifier: "en-US")
+    }
+
+    private static func bestLocale(identifier code: String) -> Locale {
+        let normalized = code.replacingOccurrences(of: "_", with: "-")
+        if fallbackCandidates.contains(normalized) {
+            return Locale(identifier: normalized)
+        }
+        let lower = normalized.lowercased()
+        if lower.contains("hant") {
+            return Locale(identifier: "zh-TW")
+        }
+        if lower.contains("hans") || lower.hasPrefix("zh") {
+            return Locale(identifier: "zh-CN")
+        }
+        let lang = lower.components(separatedBy: "-").first ?? ""
+        if let match = fallbackCandidates.first(where: { $0.hasPrefix(lang + "-") }) {
+            return Locale(identifier: match)
+        }
+        return Locale(identifier: "en-US")
     }
 }
 
@@ -82,6 +146,8 @@ final class AppleSpeechBackend: NSObject, SFSpeechRecognizerDelegate {
     private var transcript = RecognitionTranscript()
 
     private var inputFormat: AVAudioFormat?
+    private var converter: AVAudioConverter?
+    private var converterFormat: AVAudioFormat?
 
     // MARK: - Permission
 
@@ -95,9 +161,25 @@ final class AppleSpeechBackend: NSObject, SFSpeechRecognizerDelegate {
 
     // MARK: - Lifecycle
 
-    func start(language code: String?) throws {
-        let locale = SpeechLocaleMapper.locale(for: code)
-        guard let recognizer = SFSpeechRecognizer(locale: locale) else {
+    func start(language code: String?, inputMethodLanguage: String? = nil) throws {
+        var locale = SpeechLocaleMapper.locale(for: code, inputMethodLanguage: inputMethodLanguage)
+        
+        // Safety net: if the mapped locale still isn't supported by the SDK,
+        // walk the supported list for a language match before giving up.
+        var recognizer = SFSpeechRecognizer(locale: locale)
+        if recognizer == nil {
+            let supported = SFSpeechRecognizer.supportedLocales()
+            if let lang = locale.language.languageCode?.identifier,
+               let match = supported.first(where: { $0.language.languageCode?.identifier == lang }) {
+                locale = match
+                recognizer = SFSpeechRecognizer(locale: match)
+            } else {
+                locale = Locale(identifier: "en-US")
+                recognizer = SFSpeechRecognizer(locale: locale)
+            }
+        }
+        
+        guard let recognizer = recognizer else {
             let message = "Speech recognition is not supported for \(locale.identifier). Download the language in System Settings > Keyboard > Dictation."
             onError?(message)
             throw PipelineError.transcriptionFailed(message)
@@ -109,16 +191,11 @@ final class AppleSpeechBackend: NSObject, SFSpeechRecognizerDelegate {
         recognitionRequest.taskHint = .dictation
         self.recognitionRequest = recognitionRequest
 
-        let inputNode = audioEngine.inputNode
-        inputFormat = inputNode.outputFormat(forBus: 0)
-        guard let inputFormat = inputFormat else {
-            throw PipelineError.audioFileError
-        }
-
         recognitionTask = recognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
-            guard let self = self else { return }
+            guard let self else { return }
             if let error = error {
-                logger.warning("Speech recognition error: \(error.localizedDescription)")
+                let ns = error as NSError
+                logger.warning("Speech recognition error: \(error.localizedDescription) (domain=\(ns.domain) code=\(ns.code))")
                 if result == nil {
                     self.onError?(error.localizedDescription)
                 }
@@ -135,10 +212,26 @@ final class AppleSpeechBackend: NSObject, SFSpeechRecognizerDelegate {
             }
         }
 
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
-            if let rms = self?.rms(of: buffer) {
-                self?.onAudioLevel?(rms)
-            }
+        let inputNode = audioEngine.inputNode
+        inputFormat = inputNode.outputFormat(forBus: 0)
+        guard let inputFormat = inputFormat else {
+            throw PipelineError.audioFileError
+        }
+
+        // CRITICAL: SFSpeechRecognizer streaming on macOS expects 16kHz mono.
+        // Many Macs deliver 44.1/48kHz stereo from the mic, which makes the
+        // recognizer fail with "Corrupt" and transcribe nothing. Convert always.
+        guard let targetFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16000, channels: 1, interleaved: false) else {
+            throw PipelineError.audioFileError
+        }
+        converter = AVAudioConverter(from: inputFormat, to: targetFormat)
+        converterFormat = targetFormat
+
+        let request = recognitionRequest
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, _ in
+            guard let self else { return }
+            self.onAudioLevel?(self.rms(of: buffer))
+            self.appendToRecognition(buffer, request: request)
         }
 
         audioEngine.prepare()
@@ -174,12 +267,46 @@ final class AppleSpeechBackend: NSObject, SFSpeechRecognizerDelegate {
 
     // MARK: - Helpers
 
+    /// Feeds audio to the recognition request, converting to 16kHz mono first
+    /// (the format SFSpeechRecognizer needs on macOS). Skips conversion only
+    /// when the tap already delivers 16kHz mono.
+    private func appendToRecognition(_ buffer: AVAudioPCMBuffer, request: SFSpeechAudioBufferRecognitionRequest) {
+        guard let converter, let targetFormat = converterFormat else {
+            request.append(buffer)
+            return
+        }
+        if abs(buffer.format.sampleRate - 16000) < 0.5 && buffer.format.channelCount == 1 {
+            request.append(buffer)
+            return
+        }
+        // The converter consumes input synchronously inside this tap callback,
+        // so it's safe to hand it the tap buffer directly (the engine only
+        // recycles it after the callback returns).
+        let outCapacity = AVAudioFrameCount(Double(buffer.frameLength) / buffer.format.sampleRate * targetFormat.sampleRate) + 1
+        guard let out = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: outCapacity) else { return }
+
+        var delivered = false
+        let status = converter.convert(to: out, error: nil) { _, inputStatus in
+            if delivered {
+                inputStatus.pointee = .noDataNow
+                return nil
+            }
+            delivered = true
+            inputStatus.pointee = .haveData
+            return buffer
+        }
+        if out.frameLength > 0, status == .haveData || status == .inputRanDry {
+            request.append(out)
+        }
+    }
+
     private func rms(of buffer: AVAudioPCMBuffer) -> Float {
-        guard let channelData = buffer.floatChannelData else {
+        guard buffer.format.commonFormat == .pcmFormatFloat32,
+              let mData = buffer.audioBufferList.pointee.mBuffers.mData else {
             return rmsInt16(of: buffer)
         }
         let frames = Int(buffer.frameLength)
-        let data = channelData[0]
+        let data = mData.assumingMemoryBound(to: Float.self)
         var sum: Double = 0
         for i in 0..<frames {
             let sample = Double(data[i])
@@ -192,9 +319,9 @@ final class AppleSpeechBackend: NSObject, SFSpeechRecognizerDelegate {
 
     private func rmsInt16(of buffer: AVAudioPCMBuffer) -> Float {
         guard buffer.format.commonFormat == .pcmFormatInt16,
-              let raw = buffer.int16ChannelData else { return 0 }
+              let mData = buffer.audioBufferList.pointee.mBuffers.mData else { return 0 }
         let frames = Int(buffer.frameLength)
-        let data = raw[0]
+        let data = mData.assumingMemoryBound(to: Int16.self)
         var sum: Double = 0
         for i in 0..<frames {
             let sample = Double(data[i]) / 32768.0

@@ -290,7 +290,7 @@ A: Yes! Recognition is fully on-device — no internet connection or API key nee
 A: Absolutely not! Recording ONLY happens when you actively double-tap Control. No background listening ever occurs.
 
 **Q: Which languages work best?**
-A: Apple Speech supports the languages you've downloaded on your Mac (enable in System Settings → Keyboard → Dictation). English and Chinese have the highest accuracy; auto-detect handles mixed-language speech well.
+A: Apple Speech supports the languages you've downloaded on your Mac (enable in System Settings → Keyboard → Dictation). English and Chinese have the highest accuracy; Auto mode follows your active keyboard input method (Chinese IME → Chinese, English keyboard → English).
 
 **Q: Can I customize the hotkey?**
 A: Currently it's hardcoded as double-tap Control. Feel free to modify the source code and rebuild—check `HotkeyService.swift`!

@@ -29,7 +29,6 @@ let package = Package(
                 "Views/SettingsWindowController.swift",
                 "Views/StatusBarController.swift",
                 "Views/Overlay/OverlayMetrics.swift",
-                "Views/Overlay/WaveformAnimator.swift",
                 "Views/Overlay/WaveformView.swift",
                 "Views/Overlay/RecordingOverlayPanel.swift"
             ],

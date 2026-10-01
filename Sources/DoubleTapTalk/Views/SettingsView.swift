@@ -36,6 +36,10 @@ struct SettingsView: View {
                     Text("Japanese").tag("ja")
                     Text("Korean").tag("ko")
                 }
+                
+                Text("Auto follows your keyboard input method — Chinese IME → 中文识别, English keyboard → English.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             } header: {
                 Text("Speech Recognition")
             }

@@ -19,6 +19,7 @@ final class HotkeyService {
     private let doubleTapThreshold: TimeInterval = 0.3 // 300ms max between taps
     
     func start() {
+        guard !isTapActive else { return }
         logger.info("Starting hotkey service (double-tap Control detection)...")
         
         // Check accessibility permissions first
@@ -27,6 +28,7 @@ final class HotkeyService {
             logger.error("Please open System Settings → Privacy & Security → Accessibility")
             logger.error("Then add DoubleTapTalk to the allowed applications list")
             showPermissionsAlert()
+            pollForAccessibility()
             return
         }
         
@@ -43,6 +45,20 @@ final class HotkeyService {
         
         // Start health check timer
         startHealthCheck()
+    }
+    
+    /// Self-heal: keeps checking every 2s until Accessibility is granted, then
+    /// starts the event tap — no manual restart needed after granting permission.
+    private func pollForAccessibility() {
+        DispatchQueue.global().asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            guard let self, !self.isTapActive else { return }
+            if AXIsProcessTrusted() {
+                logger.info("Accessibility granted — starting hotkey service now")
+                DispatchQueue.main.async { self.start() }
+            } else {
+                self.pollForAccessibility()
+            }
+        }
     }
     
     func stop() {

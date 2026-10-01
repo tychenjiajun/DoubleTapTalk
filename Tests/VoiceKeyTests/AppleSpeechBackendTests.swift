@@ -89,19 +89,75 @@ final class SpeechLocaleMapperTests: XCTestCase {
         XCTAssertEqual(SpeechLocaleMapper.locale(for: "de").identifier, "de-DE")
     }
 
-    func testAutoUsesCurrentLocale() {
-        XCTAssertEqual(SpeechLocaleMapper.locale(for: "auto").identifier, Locale.current.identifier)
+    func testAutoReturnsSupportedDictationLocale() {
+        let loc = SpeechLocaleMapper.locale(for: "auto")
+        let supported = [
+            "en-US", "en-GB", "en-AU", "en-CA", "en-IN", "en-SG",
+            "zh-CN", "zh-HK", "zh-TW", "ja-JP", "ko-KR",
+            "es-ES", "fr-FR", "de-DE", "it-IT", "pt-BR", "ru-RU",
+        ]
+        XCTAssertTrue(supported.contains(loc.identifier), "auto must resolve to a real dictation locale, got \(loc.identifier)")
+        let lang = Locale.current.languageCode ?? ""
+        if ["zh", "en", "ja", "ko", "es", "fr", "de"].contains(lang) {
+            XCTAssertTrue(loc.identifier.hasPrefix(lang), "auto locale \(loc.identifier) should match system language \(lang)")
+        }
     }
 
-    func testUnknownLanguageCodeFallsBackToCurrentLocale() {
-        XCTAssertEqual(SpeechLocaleMapper.locale(for: "zz").identifier, Locale.current.identifier)
+    // MARK: - Input-method based auto detection
+
+    func testAutoPrefersChineseInputMethod() {
+        XCTAssertEqual(
+            SpeechLocaleMapper.locale(for: "auto", inputMethodLanguage: "zh-Hans").identifier,
+            "zh-CN"
+        )
+        XCTAssertEqual(
+            SpeechLocaleMapper.locale(for: "auto", inputMethodLanguage: "zh-Hant").identifier,
+            "zh-TW"
+        )
+    }
+
+    func testAutoPrefersEnglishKeyboard() {
+        XCTAssertEqual(
+            SpeechLocaleMapper.locale(for: "auto", inputMethodLanguage: "en").identifier,
+            "en-US"
+        )
+        XCTAssertEqual(
+            SpeechLocaleMapper.locale(for: "auto", inputMethodLanguage: "en-US").identifier,
+            "en-US"
+        )
+    }
+
+    func testAutoFollowsOtherInputMethodLanguages() {
+        XCTAssertEqual(SpeechLocaleMapper.locale(for: "auto", inputMethodLanguage: "ja").identifier, "ja-JP")
+        XCTAssertEqual(SpeechLocaleMapper.locale(for: "auto", inputMethodLanguage: "ko").identifier, "ko-KR")
+    }
+
+    func testAutoFallsBackToSystemWhenNoInputMethodInfo() {
+        // nil input method → same as today's system-locale-based resolution
+        XCTAssertEqual(
+            SpeechLocaleMapper.locale(for: "auto", inputMethodLanguage: nil).identifier,
+            SpeechLocaleMapper.locale(for: "auto").identifier
+        )
+    }
+
+    func testExplicitLanguageStillOverridesInputMethod() {
+        // Manual choice beats the input-method heuristic
+        XCTAssertEqual(
+            SpeechLocaleMapper.locale(for: "zh", inputMethodLanguage: "en").identifier,
+            "zh-CN"
+        )
+    }
+
+    func testNilLanguageFallsBackToSupportedDictationLocale() {
+        let loc = SpeechLocaleMapper.locale(for: nil)
+        XCTAssertTrue(loc.identifier.contains("-"), "nil must map to a supported dictation locale, got \(loc.identifier)")
     }
 
     func testExtendedIdentifierPassesThrough() {
         XCTAssertEqual(SpeechLocaleMapper.locale(for: "en-GB").identifier, "en-GB")
     }
 
-    func testNilLanguageFallsBackToCurrentLocale() {
-        XCTAssertEqual(SpeechLocaleMapper.locale(for: nil).identifier, Locale.current.identifier)
+    func testUnknownLanguageCodeResolvesToDefault() {
+        XCTAssertEqual(SpeechLocaleMapper.locale(for: "zz").identifier, "en-US")
     }
 }
