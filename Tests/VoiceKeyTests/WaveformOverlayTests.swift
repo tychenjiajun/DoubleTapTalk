@@ -120,31 +120,4 @@ final class OverlayMetricsTests: XCTestCase {
             last = width
         }
     }
-
-    // MARK: - Audio level normalization (dB → linear)
-
-    func testZeroDecibelsIsFullScale() {
-        XCTAssertEqual(OverlayMetrics.normalizedLevel(db: 0), 1.0, accuracy: 0.0001)
-    }
-
-    func testNegativeDecibelsIsBelowFullScale() {
-        XCTAssertEqual(OverlayMetrics.normalizedLevel(db: -40), 0.01, accuracy: 0.0001)
-        XCTAssertLessThan(OverlayMetrics.normalizedLevel(db: -40), 1.0)
-    }
-
-    func testVeryQuietDecibelFloor() {
-        XCTAssertLessThan(OverlayMetrics.normalizedLevel(db: -160), 0.0001)
-    }
-
-    func testNormalizedLevelMonotonicInDb() {
-        let low = OverlayMetrics.normalizedLevel(db: -60)
-        let mid = OverlayMetrics.normalizedLevel(db: -30)
-        let high = OverlayMetrics.normalizedLevel(db: -10)
-        XCTAssertLessThan(low, mid)
-        XCTAssertLessThan(mid, high)
-    }
-
-    func testNormalizedLevelClampsToUnit() {
-        XCTAssertEqual(OverlayMetrics.normalizedLevel(db: 12), 1.0, "Positive dB should clamp to 1.0")
-    }
 }

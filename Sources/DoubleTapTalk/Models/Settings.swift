@@ -3,62 +3,15 @@ import AppKit
 
 private let logger = FileLogger.shared
 
-enum ASRBackendType: String, CaseIterable, Codable {
-    case openAI = "openai"
-    case groq = "groq"
-    case dashscope = "dashscope"
-    case local = "local"
-    case apple = "apple"
-    
-    var requiresAPIKey: Bool {
-        switch self {
-        case .openAI, .groq, .dashscope: return true
-        case .local, .apple: return false
-        }
-    }
-    
-    /// Whether this backend streams live text while recording.
-    var isStreaming: Bool {
-        switch self {
-        case .apple: return true
-        default: return false
-        }
-    }
-    
-    var displayName: String {
-        switch self {
-        case .openAI: return "OpenAI Whisper"
-        case .groq: return "Groq"
-        case .dashscope: return "DashScope ASR"
-        case .local: return "Local (whisper.cpp)"
-        case .apple: return "Apple (On-Device)"
-        }
-    }
-    
-    var defaultURL: String {
-        switch self {
-        case .openAI: return "https://api.openai.com/v1/audio/transcriptions"
-        case .groq: return "https://api.groq.com/openai/v1/audio/transcriptions"
-        case .dashscope: return "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-        case .local: return "http://localhost:8080/v1/audio/transcriptions"
-        case .apple: return ""
-        }
-    }
-}
-
+/// Global app settings. Speech recognition is fixed to Apple's on-device
+/// backend — the only remaining settings concern language + LLM polishing.
 final class DoubleTapTalkSettings: ObservableObject {
     static let shared = DoubleTapTalkSettings()
     
     private let defaults = UserDefaults.standard
     
     private enum Keys {
-        static let backendType = "ASRBackendType"
-        static let apiURL = "ASRAPIURL"
         static let language = "ASRLanguage"
-        static let model = "ASRModel"
-        static let useLocalServer = "UseLocalServer"
-        // Debug recording keys
-        static let keepRecordings = "DebugKeepRecordings"
         // LLM Polishing keys
         static let llmEnabled = "LLMEnabled"
         static let llmProvider = "LLMProvider"
@@ -71,93 +24,9 @@ final class DoubleTapTalkSettings: ObservableObject {
         static let pinnedPolishProfile = "PinnedPolishProfile"
     }
     
-    @Published var backendType: ASRBackendType {
-        didSet {
-            logger.info("Settings: Backend changed to \(backendType.displayName)")
-            defaults.set(backendType.rawValue, forKey: Keys.backendType)
-            // Update URL when backend changes
-            apiURL = backendType.defaultURL
-        }
-    }
-    
-    @Published var apiURL: String {
-        didSet {
-            defaults.set(apiURL, forKey: Keys.apiURL)
-        }
-    }
-    
     @Published var language: String {
         didSet {
             defaults.set(language, forKey: Keys.language)
-        }
-    }
-    
-    @Published var model: String {
-        didSet {
-            defaults.set(model, forKey: Keys.model)
-        }
-    }
-    
-    @Published var useLocalServer: Bool {
-        didSet {
-            defaults.set(useLocalServer, forKey: Keys.useLocalServer)
-        }
-    }
-    
-    // MARK: - Debug Settings
-    
-    @Published var keepRecordings: Bool {
-        didSet {
-            defaults.set(keepRecordings, forKey: Keys.keepRecordings)
-            logger.info("Settings: Keep recordings \(keepRecordings ? "enabled" : "disabled")")
-        }
-    }
-    
-    var debugRecordingsURL: URL {
-        FileManager.default.temporaryDirectory.appendingPathComponent("dtt_debug_recordings")
-    }
-    
-    @Published var debugRecordingsCount: Int = 0 {
-        didSet {
-            logger.debug("Settings: Debug recordings count updated to \(debugRecordingsCount)")
-        }
-    }
-    
-    func refreshDebugRecordingsCount() {
-        let newCount = calculateDebugRecordingsCount()
-        if newCount != debugRecordingsCount {
-            debugRecordingsCount = newCount
-        }
-    }
-    
-    private func calculateDebugRecordingsCount() -> Int {
-        guard let contents = try? FileManager.default.contentsOfDirectory(atPath: debugRecordingsURL.path) else { return 0 }
-        return contents.count
-    }
-    
-    func clearDebugRecordings() {
-        let count = debugRecordingsCount
-        try? FileManager.default.removeItem(at: debugRecordingsURL)
-        debugRecordingsCount = 0
-        logger.info("Settings: Cleared \(count) debug recordings")
-    }
-    
-    // MARK: - API Key
-    
-    var apiKey: String? {
-        get {
-            let key = KeychainService.shared.getAPIKey(for: backendType)
-            logger.debug("Settings: API key exists for \(backendType.rawValue): \(key != nil ? "yes" : "no")")
-            return key
-        }
-        set {
-            if let newValue = newValue {
-                logger.info("Settings: Saving API key for \(backendType.rawValue)")
-                KeychainService.shared.saveAPIKey(newValue, for: backendType)
-            } else {
-                logger.info("Settings: Deleting API key for \(backendType.rawValue)")
-                KeychainService.shared.deleteAPIKey(for: backendType)
-            }
         }
     }
     
@@ -236,30 +105,7 @@ final class DoubleTapTalkSettings: ObservableObject {
     }
     
     private init() {
-        // Load saved settings or use defaults
-        let savedBackend = defaults.string(forKey: Keys.backendType) ?? ASRBackendType.openAI.rawValue
-        let backend = ASRBackendType(rawValue: savedBackend) ?? .openAI
-        self.backendType = backend
-        self.apiURL = defaults.string(forKey: Keys.apiURL) ?? backend.defaultURL
         self.language = defaults.string(forKey: Keys.language) ?? "auto"
-        
-        // Set appropriate default model based on backend
-        if backend == .openAI {
-            self.model = defaults.string(forKey: Keys.model) ?? "whisper-1"
-        } else if backend == .groq {
-            self.model = defaults.string(forKey: Keys.model) ?? "whisper-large-v3-turbo"
-        } else if backend == .dashscope {
-            self.model = defaults.string(forKey: Keys.model) ?? "qwen3-asr-flash"
-        } else if backend == .apple {
-            self.model = defaults.string(forKey: Keys.model) ?? "SFSpeechRecognizer"
-        } else {
-            self.model = defaults.string(forKey: Keys.model) ?? "whisper.cpp"
-        }
-        
-        self.useLocalServer = defaults.bool(forKey: Keys.useLocalServer)
-        
-        // Load debug settings
-        self.keepRecordings = defaults.bool(forKey: Keys.keepRecordings)
         
         // Load app-specific polish setting (must load before other LLM settings that may reference it)
         // Default to true for new installs, respect saved value for existing users
@@ -282,15 +128,10 @@ final class DoubleTapTalkSettings: ObservableObject {
         self.llmTimeout = timeoutValue > 0.0 ? timeoutValue : 5.0
         self.llmSystemPrompt = defaults.string(forKey: Keys.llmSystemPrompt) ?? LLMSettings.default.systemPrompt
         self.llmAPIKey = defaults.string(forKey: "LLMAPIKey")
-        self.refreshDebugRecordingsCount()
     }
     
     func reset() {
-        backendType = .openAI
-        apiURL = ASRBackendType.openAI.defaultURL
         language = "auto"
-        model = "whisper-1"
-        useLocalServer = false
         
         // Reset LLM polishing settings
         llmEnabled = false

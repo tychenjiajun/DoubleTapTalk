@@ -25,7 +25,7 @@ DoubleTapTalk transforms how you interact with your Mac. Instead of typing, **sp
 |---------|--------|
 | ⚡ **3x Faster Than Typing** | Average speaking speed: 150 wpm vs typing: 40-50 wpm |
 | 🧠 **AI-Powered Polish** | Smart context detection auto-formats text for terminals, emails, code comments, chats |
-| 🔒 **Privacy First** | On-device Apple Speech or local whisper.cpp — no uploads, no API key required |
+| 🔒 **Privacy First** | On-device Apple Speech — no uploads, no API key required |
 | 🌍 **100+ Languages** | Auto-detect or manually select from Chinese, English, Spanish, French, Japanese & more |
 | 🎨 **Zero Learning Curve** | Simple double-tap gesture works everywhere |
 
@@ -45,25 +45,24 @@ DoubleTapTalk transforms how you interact with your Mac. Instead of typing, **sp
   - 👆 Single-click → Insert raw transcription (instant)
   - 👆👆 Double-click → Insert AI-polished text (smart)
 - **Multi-Language Support**: Auto-detect from 100+ languages or manually select
-- **Secure API Storage**: Keys encrypted in macOS Keychain—never exposed
+- **Zero Setup**: No API keys, no accounts, no configuration
 - **Menu Bar Design**: Runs quietly without Dock icon clutter
 - **⚡ Streaming Live Text** (Apple backend): watch your words appear live as you speak
 - **🎛️ Recording Overlay**: frameless capsule with real-time waveform + live transcription, spring animations
 
-#### 🔄 Flexible Backend Options
-Choose your preferred speech recognition service:
+#### 🛡️ On-Device Recognition (Apple)
+
+Speech recognition runs entirely on your Mac using Apple's Speech framework:
 
 | Backend | Type | Best For | Accuracy | Speed |
 |---------|------|----------|----------|--------|
-| **OpenAI Whisper** | Cloud ⛅ | Highest accuracy | ⭐⭐⭐⭐⭐ | Fast |
-| **Groq** | Cloud ⛅ | Ultra-fast inference | ⭐⭐⭐⭐ | ⚡ Ultra-fast |
-| **DashScope Flash** | Cloud ⛅ | Chinese language | ⭐⭐⭐⭐⭐ | Fast |
-| **Apple (On-Device)** | Offline ⚡ | Streaming live text, zero setup | ⭐⭐⭐⭐ | ⚡ Live |
-| **Local whisper.cpp** | Offline 💻 | Privacy-sensitive work | ⭐⭐⭐⭐ | Medium |
+| **Apple (On-Device)** | Offline ⚡ | Streaming live text, zero setup, privacy | ⭐⭐⭐⭐ | ⚡ Live |
 
-💡 **No lock-in**: Switch backends anytime in settings!
+- ⚡ **Streaming**: watch your words appear live as you speak
+- 🔒 **Private**: audio never leaves your Mac — no uploads, no API key
+- 🌍 **Multilingual**: auto-detect or choose zh/en/ja/ko/es/fr/de
 
-🚀 **Apple (On-Device)** uses Apple's built-in Speech framework: streaming live transcription, no API key, and audio never leaves your Mac.
+> The only backend — deliberately so. No keys, no servers, no configuration.
 
 #### ✨ AI-Powered Smart Polish
 Optional LLM-powered text enhancement that understands context:
@@ -139,11 +138,7 @@ Built for extensibility and debugging:
 - 🎛️ **Accessibility Permission**: For hotkey detection and text injection
 - 🧠 **Speech Recognition** (Apple backend only): On-device, prompted once when you first use it
 
-**API Keys **— cloud backends only; Apple on-device needs none
-- 🌐 OpenAI API key (~$0.006/minute of audio)
-- ⚡ Groq API key (free tier available)
-- 💼 DashScope/ModelScope API key (excellent for Chinese)
-- 💻 Local whisper.cpp server (completely free, privacy-focused)
+**API Keys **— none needed for speech recognition (Apple on-device). LLM polish providers require their own key.
 
 ### 🚀 Get Started in 3 Minutes
 
@@ -171,16 +166,14 @@ open DoubleTapTalk.app
 3. Toggle **Microphone** permission when prompted
 4. Restart DoubleTapTalk after adding permissions
 
-#### Step 3: Configure Backend
+#### Step 3: No Configuration Needed
 
 Click ⚙️ **Settings** in menu bar (or press ⌘,):
 
-1. **Select ASR Backend**: Choose Apple (On-Device), OpenAI, Groq, DashScope, or Local
-2. **Enter API Key**: Saved securely to macOS Keychain 🔒
-3. **Choose Language**: Auto-detect recommended for mixed-language speech
-4. **(Optional) Enable AI Polish**: Connect LLM provider for smart text enhancement
+1. **Choose your language** (optional): Speech Recognition → Language (auto-detect recommended)
+2. **(Optional) Enable AI Polish**: Connect an LLM provider for smart text enhancement
 
-**💡 Pro Tip**: Start with **OpenAI Whisper + GPT-4o** for best overall quality — or **Apple (On-Device)** for streaming live text, zero setup, and no API key!
+**💡 Pro Tip**: It just works — double-tap Control and talk. Speech recognition is Apple on-device: no API keys, no servers, no setup.
 
 #### Step 4: Start Using!
 
@@ -191,9 +184,8 @@ Click ⚙️ **Settings** in menu bar (or press ⌘,):
 ### ⚙️ Advanced Configuration
 
 #### Speech Recognition Settings
-- **Backend Type**: Apple (On-Device) / OpenAI / Groq / DashScope / Local whisper.cpp
-- **Language**: auto / zh-CN / en / +100 more languages
-- **Model Selection**: whisper-1 / whisper-large-v3 / qwen3-asr-flash
+- **Backend**: Apple (On-Device) — fixed, no configuration
+- **Language**: auto / zh-CN / en / ja / ko / es / fr / de
 
 #### AI Polish Settings (Optional)
 - **Enable/Disable Toggle**: Turn polish on or off instantly
@@ -218,7 +210,7 @@ Click ⚙️ **Settings** in menu bar (or press ⌘,):
 # Debug build (fast iteration)
 swift build
 
-# Run the test suite (71 tests)
+# Run the test suite (66 tests)
 swift test
 
 # Release build (optimized performance)
@@ -286,19 +278,19 @@ MIT License - See [LICENSE](LICENSE) file for details.
 ### ❓ Frequently Asked Questions
 
 **Q: Is this free to use?**
-A: The app itself is 100% free and open-source (MIT License). You'll need an API key for cloud backends (OpenAI, Groq, etc.), but local whisper.cpp is completely free!
+A: 100% free and open-source (MIT). Speech recognition uses Apple's built-in on-device engine — no API keys, no usage fees, ever.
 
-**Q: How much does it cost with OpenAI Whisper?**
-A: Roughly $0.006 per minute of audio. If you dictate for 30 minutes daily, that's about $5-6/month.
+**Q: How much does speech recognition cost?**
+A: $0. Recognition is on-device via Apple Speech. The only optional cost is AI polish if you choose a paid LLM provider.
 
 **Q: Can I use this offline?**
-A: Yes! Pick **Apple (On-Device)** for instant offline streaming with zero setup — no API key, no local server. (Or run whisper.cpp for higher accuracy on technical terms.)
+A: Yes! Recognition is fully on-device — no internet connection or API key needed.
 
 **Q: Does this record my conversations in the background?**
 A: Absolutely not! Recording ONLY happens when you actively double-tap Control. No background listening ever occurs.
 
 **Q: Which languages work best?**
-A: Whisper supports 100+ languages. English and Chinese have the highest accuracy. Auto-detect handles mixed-language speech well.
+A: Apple Speech supports the languages you've downloaded on your Mac (enable in System Settings → Keyboard → Dictation). English and Chinese have the highest accuracy; auto-detect handles mixed-language speech well.
 
 **Q: Can I customize the hotkey?**
 A: Currently it's hardcoded as double-tap Control. Feel free to modify the source code and rebuild—check `HotkeyService.swift`!

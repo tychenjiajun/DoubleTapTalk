@@ -17,8 +17,6 @@ struct DoubleTapTalkApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusBarController: StatusBarController?
     private var hotkeyService: HotkeyService?
-    private var audioRecorder: AudioRecorder?
-    private var asrService: ASRService?
     private var textInjectionService: TextInjectionService?
     private var appleSpeechBackend: AppleSpeechBackend?
     private lazy var recordingOverlay = RecordingOverlayPanel()
@@ -41,16 +39,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Initialize services
         logger.debug("Initializing TextInjectionService...")
         textInjectionService = TextInjectionService()
-        logger.debug("Initializing AudioRecorder...")
-        audioRecorder = AudioRecorder()
-        // Feed file-mode recording levels into the shared overlay waveform
-        audioRecorder?.onLevelUpdate = { [weak self] level in
-            Task { @MainActor in
-                self?.recordingOverlay.setAudioLevel(level)
-            }
-        }
-        logger.debug("Initializing ASRService...")
-        asrService = ASRService()
         
         // Initialize status bar
         statusBarController = StatusBarController()
@@ -81,7 +69,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     
     func applicationWillTerminate(_ notification: Notification) {
         hotkeyService?.stop()
-        _ = audioRecorder?.stopRecording()
     }
     
     private func showSettings() {
@@ -114,8 +101,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private func startRecording() {
-        guard let audioRecorder = audioRecorder else { return }
-        
         Task {
             // Check and request microphone permission if needed
             let status = AVCaptureDevice.authorizationStatus(for: .audio)
@@ -150,19 +135,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
             
-            // Proceed with recording — streaming Apple path vs file-based path
+            // Proceed with recording — Apple streaming is the only backend
             do {
-                if DoubleTapTalkSettings.shared.backendType == .apple {
-                    try await startAppleStreaming()
-                } else {
-                    logger.info("Starting recording...")
-                    try await audioRecorder.startRecording()
-                    await MainActor.run {
-                        recordingOverlay.show()
-                        statusBarController?.updateState(.recording)
-                        logger.info("Recording started")
-                    }
-                }
+                try await startAppleStreaming()
             } catch {
                 await MainActor.run {
                     logger.info("Failed to start recording: \(error)")
@@ -249,51 +224,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusBarController?.updateState(.processing)
         logger.info("Recording stopped")
         
-        // Streaming Apple path: stop recognition, get final text immediately
-        if let backend = appleSpeechBackend {
-            appleSpeechBackend = nil
-            Task {
-                let rawText = await backend.stop()
-                await MainActor.run {
-                    recordingOverlay.updateText("Polishing…")
-                }
-                await finalize(rawText: rawText, polish: polish, recordingURL: nil)
-            }
-            return
-        }
-        
-        // File-based path
-        guard let audioRecorder = audioRecorder else {
+        guard let backend = appleSpeechBackend else {
             statusBarController?.updateState(.idle)
             return
         }
-        
-        let audioURL = audioRecorder.stopRecording()
-        guard let url = audioURL else {
-            logger.info("No audio URL returned")
-            statusBarController?.updateState(.idle)
-            return
-        }
+        appleSpeechBackend = nil
         
         Task {
-            do {
-                logger.info("Transcribing audio from: \(url.path)")
-                let rawText = try await asrService?.transcribe(audioURL: url) ?? ""
-                logger.info("Transcription result: '\(rawText)'")
-                await finalize(rawText: rawText, polish: polish, recordingURL: url)
-            } catch {
-                await MainActor.run {
-                    logger.info("Transcription FAILED: \(error)")
-                    recordingOverlay.dismiss()
-                    statusBarController?.updateState(.error)
-                }
+            let rawText = await backend.stop()
+            await MainActor.run {
+                recordingOverlay.updateText("Polishing…")
             }
+            await finalize(rawText: rawText, polish: polish)
         }
     }
     
-    /// Shared tail for BOTH the file-based and streaming paths (DRY):
-    /// polish → ✨ reveal (when changed) → inject → dismiss overlay → clean up.
-    private func finalize(rawText: String, polish: Bool, recordingURL: URL?) async {
+    /// Shared tail (DRY): polish → ✨ reveal (when changed) → inject → dismiss overlay.
+    private func finalize(rawText: String, polish: Bool) async {
         let text = await PolishProcessor().process(
             rawText: rawText,
             settings: LLMSettings.current(),
@@ -329,17 +276,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusBarController?.updateState(.idle)
         }
         
-        // Clean up temp recording (file mode only)
-        guard let url = recordingURL else { return }
-        if DoubleTapTalkSettings.shared.keepRecordings {
-            let debugDir = DoubleTapTalkSettings.shared.debugRecordingsURL
-            try? FileManager.default.createDirectory(at: debugDir, withIntermediateDirectories: true)
-            let destURL = debugDir.appendingPathComponent(url.lastPathComponent)
-            try? FileManager.default.moveItem(at: url, to: destURL)
-            logger.info("Recording saved to debug dir: \(destURL.path)")
-        } else {
-            try? FileManager.default.removeItem(at: url)
-        }
+        // Clean up is not needed — Apple streaming never writes audio files.
     }
 }
 

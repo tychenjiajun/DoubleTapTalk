@@ -207,7 +207,7 @@ final class LLMService {
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
             let errorText = String(data: data, encoding: .utf8) ?? "Unknown error"
             logger.error("OpenAI API error: \(errorText)")
-            throw ASRError.transcriptionFailed(errorText)
+            throw PipelineError.transcriptionFailed(errorText)
         }
         
         // Log full response for debugging
@@ -217,7 +217,7 @@ final class LLMService {
         
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             logger.error("Invalid JSON response")
-            throw ASRError.invalidResponse
+            throw PipelineError.invalidResponse
         }
         
         // Try multiple parsing strategies for different API formats
@@ -251,7 +251,7 @@ final class LLMService {
         else {
             logger.error("Unknown response format. Available keys: \(json.keys)")
             logger.error("Raw JSON: \(json)")
-            throw ASRError.invalidResponse
+            throw PipelineError.invalidResponse
         }
         
         return stripMarkdownCodeBlocks(content!)
@@ -290,14 +290,14 @@ final class LLMService {
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
             let errorText = String(data: data, encoding: .utf8) ?? "Unknown error"
             logger.error("Anthropic API error: \(errorText)")
-            throw ASRError.transcriptionFailed(errorText)
+            throw PipelineError.transcriptionFailed(errorText)
         }
         
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let contentArray = json["content"] as? [[String: Any]],
               let firstContent = contentArray.first,
               let content = firstContent["text"] as? String else {
-            throw ASRError.invalidResponse
+            throw PipelineError.invalidResponse
         }
         
         return stripMarkdownCodeBlocks(content)
@@ -343,7 +343,7 @@ final class LLMService {
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
             let errorText = String(data: data, encoding: .utf8) ?? "Unknown error"
             logger.error("Google API error: \(errorText)")
-            throw ASRError.transcriptionFailed(errorText)
+            throw PipelineError.transcriptionFailed(errorText)
         }
         
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -353,7 +353,7 @@ final class LLMService {
               let parts = content["parts"] as? [[String: Any]],
               let firstPart = parts.first,
               let text = firstPart["text"] as? String else {
-            throw ASRError.invalidResponse
+            throw PipelineError.invalidResponse
         }
         
         return stripMarkdownCodeBlocks(text)

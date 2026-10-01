@@ -3,8 +3,7 @@ import AppKit
 
 private let logger = FileLogger.shared
 
-/// Shared polish pipeline used by BOTH the file-based ASR path and the
-/// streaming Apple path. Extracted from ASRService so there is exactly
+/// Shared polish pipeline used by the streaming Apple path. Extracted so there is
 /// one place that performs LLM polishing (DRY).
 ///
 /// Guarantees: never throws for LLM failures — polishing is best-effort and
@@ -102,7 +101,7 @@ final class PolishProcessor {
             group.addTask { try await operation() }
             group.addTask {
                 try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
-                throw ASRError.timeout
+                throw PipelineError.timeout
             }
             let result = try await group.next()!
             group.cancelAll()

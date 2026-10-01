@@ -100,7 +100,7 @@ final class AppleSpeechBackend: NSObject, SFSpeechRecognizerDelegate {
         guard let recognizer = SFSpeechRecognizer(locale: locale) else {
             let message = "Speech recognition is not supported for \(locale.identifier). Download the language in System Settings > Keyboard > Dictation."
             onError?(message)
-            throw ASRError.transcriptionFailed(message)
+            throw PipelineError.transcriptionFailed(message)
         }
 
         transcript.reset()
@@ -112,7 +112,7 @@ final class AppleSpeechBackend: NSObject, SFSpeechRecognizerDelegate {
         let inputNode = audioEngine.inputNode
         inputFormat = inputNode.outputFormat(forBus: 0)
         guard let inputFormat = inputFormat else {
-            throw ASRError.audioFileError
+            throw PipelineError.audioFileError
         }
 
         recognitionTask = recognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in

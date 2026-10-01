@@ -15,18 +15,12 @@ let package = Package(
             sources: [
                 "App/DoubleTapTalkApp.swift",
                 "Backends/AppleSpeechBackend.swift",
-                "Backends/DashscopeASRBackend.swift",
-                "Backends/LocalWhisperBackend.swift",
-                "Backends/OpenAIWhisperBackend.swift",
-                "Models/ASRBackend.swift",
                 "Models/LLMProvider.swift",
+                "Models/PipelineError.swift",
                 "Models/PolishModels.swift",
                 "Models/Settings.swift",
                 "Services/AccessibilityService.swift",
-                "Services/ASRService.swift",
-                "Services/AudioRecorder.swift",
                 "Services/HotkeyService.swift",
-                "Services/KeychainService.swift",
                 "Services/LLMService.swift",
                 "Services/MicrophonePermissionService.swift",
                 "Services/PolishProcessor.swift",
@@ -45,7 +39,6 @@ let package = Package(
                 .linkedFramework("AVFoundation"),
                 .linkedFramework("Carbon"),
                 .linkedFramework("CoreGraphics"),
-                .linkedFramework("Security"),
                 .linkedFramework("ServiceManagement")
             ]
         ),

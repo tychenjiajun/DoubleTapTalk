@@ -15,12 +15,6 @@ struct OverlayMetrics {
         let textWidth = CGFloat(text.count) * avgCharWidth + internalPadding
         return min(max(textWidth, minWidth), maxWidth)
     }
-
-    /// Converts AVAudioRecorder averagePower (decibels, ~-160...0) to a 0...1 linear level.
-    static func normalizedLevel(db: Float) -> Float {
-        guard db.isFinite else { return 0 }
-        return min(max(pow(10.0, db / 20.0), 0), 1)
-    }
 }
 
 /// Pure waveform animation state — envelope smoothing (attack/release) plus
