@@ -21,6 +21,11 @@ final class RecordingOverlayPanel: NSPanel {
     private let busyWaveform = IndeterminateWaveform()
     private var displayTimer: Timer?
     private var autoDismissTimer: Timer?
+    /// Bumped on every `present()`; the delayed `orderOut` scheduled by
+    /// `dismiss()` only fires while the id is unchanged, so a session that
+    /// starts within the fade window can't have its panel yanked off screen
+    /// while `isShowing` stays true.
+    private var presentationID = 0
 
     private let capsuleHeight: CGFloat = OverlayMetrics.baseHeight
     private let hPadding: CGFloat = OverlayMetrics.horizontalPadding
@@ -125,6 +130,13 @@ final class RecordingOverlayPanel: NSPanel {
         receipt = nil
         borderFlash = nil
         isCompact = false
+        // Fresh session = fresh visual state. The previous session ends in
+        // `.success` with its summary in `liveText`; carrying that over would
+        // hide the timer/status column (applyLayout keys off the state) and
+        // repaint the old receipt until the first word of the NEW session.
+        state = .listening
+        liveText = ""
+        resolved = style(for: state)
         sessionStartedAt = Date()
         compactIdleThreshold = OverlayMetrics.compactIdleThreshold(idleThreshold: idleThreshold)
         lastActivityAt = Date()
@@ -260,8 +272,10 @@ final class RecordingOverlayPanel: NSPanel {
             fade.timingFunction = CAMediaTimingFunction(name: .easeIn)
             layer.add(fade, forKey: "exitFade")
         }
+        let dismissedAt = presentationID
         DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
-            self?.orderOut(nil)
+            guard let self, self.presentationID == dismissedAt else { return }
+            self.orderOut(nil)
         }
 
         // Scale-down exit on the capsule layer — decorative, so it is skipped
@@ -553,6 +567,8 @@ final class RecordingOverlayPanel: NSPanel {
     /// entry motion is a layer animation on top (so it can never strand the
     /// panel at a stale frame or at alpha 0).
     private func present() {
+        // Invalidates any pending orderOut from a just-finished dismiss.
+        presentationID += 1
         let frame = preparedFrame()
         updateCornerRadius(for: frame.height, animated: false)
         // Undo the exit scale, if this capsule was already shown once.

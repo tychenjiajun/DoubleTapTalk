@@ -20,6 +20,9 @@ final class HotkeyService {
     private var isRecording = false
     private var isTapActive = false
     private var healthCheckTimer: Timer?
+    /// One "give me Accessibility" modal per run — recovery paths re-enter
+    /// `start()` while permission is still missing.
+    private var permissionAlertShown = false
     private let logger = FileLogger.shared
     
     // Track tap timing for double-tap detection
@@ -27,7 +30,14 @@ final class HotkeyService {
     private let doubleTapThreshold: TimeInterval = 0.3 // 300ms max between taps
     
     func start() {
-        guard !isTapActive else { return }
+        if isTapActive, tapIsHealthy() { return }
+        if eventTap != nil {
+            // A tap object exists but is dead/disabled (system invalidated it,
+            // or macOS timed out our callback). Tear it down so we rebuild
+            // fresh instead of leaving a corpse behind.
+            logger.warning("Event tap present but unhealthy — rebuilding")
+            teardownTap()
+        }
         logger.info("Starting hotkey service (double-tap Control detection)...")
         
         // Check accessibility permissions first
@@ -50,6 +60,8 @@ final class HotkeyService {
         }
         
         logger.info("Hotkey service started successfully - double-tap Control to record")
+        // Permission is back: the next denial may show its own alert.
+        permissionAlertShown = false
         
         // Start health check timer
         startHealthCheck()
@@ -101,25 +113,37 @@ final class HotkeyService {
         // Stop health check
         healthCheckTimer?.invalidate()
         healthCheckTimer = nil
+        teardownTap()
+        logger.info("Hotkey service stopped")
+    }
+
+    /// Removes the current tap + run-loop source and clears the active flag.
+    /// Must run on the run loop the source was added to (main). Assumes the
+    /// invalidation callback has already been detached so teardown can't
+    /// re-enter us.
+    private func teardownTap() {
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
-            logger.debug("Event tap disabled")
+            CFMachPortSetInvalidationCallBack(tap, nil)
+            CFMachPortInvalidate(tap)
+            logger.debug("Event tap invalidated")
         }
         if let source = runLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
             logger.debug("Run loop source removed")
         }
-        // Remove tap invalidation listener (so teardown can't re-enter us),
-        // then invalidate.
-        if let tap = eventTap {
-            CFMachPortSetInvalidationCallBack(tap, nil)
-            CFMachPortInvalidate(tap)
-            logger.debug("Event tap invalidated")
-        }
         eventTap = nil
         runLoopSource = nil
         isTapActive = false
-        logger.info("Hotkey service stopped")
+    }
+
+    /// The tap exists, hasn't been invalidated by the system, and is still
+    /// enabled. `isTapActive` alone can't answer this: the invalidation
+    /// callback carries no usable info pointer, and a tap macOS disabled stays
+    /// "active" from our point of view.
+    private func tapIsHealthy() -> Bool {
+        guard let tap = eventTap else { return false }
+        return CGEvent.tapIsEnabled(tap: tap)
     }
     
     private func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
@@ -128,10 +152,21 @@ final class HotkeyService {
             handleFlagsChanged(event: event)
         case .keyDown:
             handleKeyDown(event: event)
+        case .tapDisabledByTimeout, .tapDisabledByUserInput:
+            // macOS disabled our tap (callback stall / user toggled it off).
+            // Without an explicit re-enable the hotkey stays dead until the
+            // app restarts — the health check only notices every 30s.
+            logger.warning("Event tap disabled by system (\(type.rawValue)) — re-enabling")
+            if let tap = eventTap {
+                CGEvent.tapEnable(tap: tap, enable: true)
+            }
         default:
             break
         }
-        return Unmanaged.passRetained(event)
+        // passUnretained: the system owns the event. passRetained here hands
+        // it an extra +1 per system-wide keyboard event (a slow leak in a tap
+        // that sees every keystroke).
+        return Unmanaged.passUnretained(event)
     }
 
     private func handleFlagsChanged(event: CGEvent) {
@@ -219,7 +254,7 @@ final class HotkeyService {
                 eventsOfInterest: CGEventMask(eventMask),
                 callback: { (proxy, type, event, refcon) -> Unmanaged<CGEvent>? in
                     guard let refcon = refcon else {
-                        return Unmanaged.passRetained(event)
+                        return Unmanaged.passUnretained(event)
                     }
                     let service = Unmanaged<HotkeyService>.fromOpaque(refcon).takeUnretainedValue()
                     return service.handleEvent(proxy: proxy, type: type, event: event)
@@ -252,9 +287,13 @@ final class HotkeyService {
     }
     
     private func startHealthCheck() {
+        healthCheckTimer?.invalidate()
         healthCheckTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
             guard let self = self else { return }
-            if !self.isTapActive {
+            // Health = real tap state, not the bookkeeping flag: an invalidated
+            // or system-disabled tap must trigger recovery even though
+            // `isTapActive` is still true.
+            if !self.tapIsHealthy() {
                 self.logger.error("Event tap inactive, attempting recovery")
                 DispatchQueue.main.async { self.start() }
             }
@@ -263,6 +302,10 @@ final class HotkeyService {
     }
     
     private func showPermissionsAlert() {
+        // Dedupe: recovery attempts (health check / poll) must not stack modal
+        // alerts while permission is still missing.
+        guard !permissionAlertShown else { return }
+        permissionAlertShown = true
         DispatchQueue.main.async {
             let alert = NSAlert()
             alert.messageText = "Accessibility Permission Required"

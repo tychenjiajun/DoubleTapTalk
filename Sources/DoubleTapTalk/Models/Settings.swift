@@ -19,6 +19,7 @@ final class DoubleTapTalkSettings: ObservableObject {
         static let llmTemperature = "LLMTemperature"
         static let llmSystemPrompt = "LLMSystemPrompt"
         static let llmBaseURL = "LLMBASEURL"
+        static let llmAPIKey = "LLMAPIKey"
         static let llmTimeout = "LLMTimeout"
         static let useAppSpecificPolish = "UseAppSpecificPolish"
         static let pinnedPolishProfile = "PinnedPolishProfile"
@@ -87,9 +88,11 @@ final class DoubleTapTalkSettings: ObservableObject {
         }
     }
     
+    /// Secrets live in the Keychain (see `persistSecret`); UserDefaults only
+    /// holds a plaintext copy when the Keychain rejects the write.
     @Published var llmAPIKey: String? = nil {
         didSet {
-            defaults.set(llmAPIKey, forKey: "LLMAPIKey")
+            persistSecret(llmAPIKey, keychainKey: KeychainStore.Account.llmAPIKey, defaultsKey: Keys.llmAPIKey)
             logger.info("Settings: LLM API key \(llmAPIKey != nil ? "saved" : "cleared")")
         }
     }
@@ -135,12 +138,10 @@ final class DoubleTapTalkSettings: ObservableObject {
 
     @Published var asrAPIKey: String? = nil {
         didSet {
-            defaults.set(asrAPIKey, forKey: Keys.asrAPIKey)
+            persistSecret(asrAPIKey, keychainKey: KeychainStore.Account.asrAPIKey, defaultsKey: Keys.asrAPIKey)
             logger.info("Settings: Cloud ASR API key \(asrAPIKey != nil ? "saved" : "cleared")")
         }
     }
-
-    // MARK: - Continuous Dictation (Relay) Settings
 
     // MARK: - Continuous Dictation (Relay) Settings
 
@@ -172,8 +173,11 @@ final class DoubleTapTalkSettings: ObservableObject {
         let provider = LLMProvider(rawValue: savedProvider) ?? .openai
         self.llmProvider = provider
         self.llmModel = defaults.string(forKey: Keys.llmModel) ?? "gpt-4o-mini"
-        let tempValue = defaults.double(forKey: Keys.llmTemperature)
-        self.llmTemperature = tempValue == 0.0 ? 0.3 : tempValue
+        // object(forKey:) distinguishes "never set" from an explicit 0.0 —
+        // the old `tempValue == 0.0` mapping made a deliberate 0 impossible.
+        self.llmTemperature = defaults.object(forKey: Keys.llmTemperature) == nil
+            ? 0.3
+            : defaults.double(forKey: Keys.llmTemperature)
         self.llmBaseURL = defaults.string(forKey: Keys.llmBaseURL)
         let timeoutValue = defaults.double(forKey: Keys.llmTimeout)
         self.llmTimeout = timeoutValue > 0.0 ? timeoutValue : 5.0
@@ -183,16 +187,42 @@ final class DoubleTapTalkSettings: ObservableObject {
         self.asrEnabled = defaults.bool(forKey: Keys.asrEnabled)
         self.asrModel = defaults.string(forKey: Keys.asrModel) ?? ASRSettings.defaultModel
         self.asrBaseURL = defaults.string(forKey: Keys.asrBaseURL)
-        self.asrAPIKey = defaults.string(forKey: Keys.asrAPIKey)
+        self.asrAPIKey = Self.readSecret(keychainKey: KeychainStore.Account.asrAPIKey, defaultsKey: Keys.asrAPIKey)
 
-        // Load continuous dictation settings. Relay is OPT-IN (default OFF):
-        // it changes the core UX (mic stays open, auto-split + auto-insert),
-        // so existing users must not get it on upgrade without asking.
+        // Load continuous dictation settings (relay is the only mode).
         let relayThreshold = defaults.double(forKey: Keys.relayIdleThreshold)
         self.relayIdleThreshold = relayThreshold > 0.0 ? relayThreshold : 3.0
 
         self.llmSystemPrompt = defaults.string(forKey: Keys.llmSystemPrompt) ?? LLMSettings.default.systemPrompt
-        self.llmAPIKey = defaults.string(forKey: "LLMAPIKey")
+        self.llmAPIKey = Self.readSecret(keychainKey: KeychainStore.Account.llmAPIKey, defaultsKey: Keys.llmAPIKey)
+    }
+
+    /// Keychain first; a legacy plaintext copy in UserDefaults is migrated
+    /// over (removed only once the Keychain write succeeded), and kept as-is
+    /// when the Keychain refuses — never lose a working configuration.
+    private static func readSecret(keychainKey: String, defaultsKey: String) -> String? {
+        if let stored = KeychainStore.string(forKey: keychainKey) {
+            return stored
+        }
+        guard let legacy = UserDefaults.standard.string(forKey: defaultsKey), !legacy.isEmpty else { return nil }
+        if KeychainStore.set(legacy, forKey: keychainKey) {
+            UserDefaults.standard.removeObject(forKey: defaultsKey)
+            FileLogger.shared.info("Settings: migrated \(defaultsKey) into the Keychain")
+        }
+        return legacy
+    }
+
+    /// Writes a secret to the Keychain; on a Keychain failure it falls back
+    /// to UserDefaults so the app keeps working (logged loudly — that copy is
+    /// plaintext).
+    private func persistSecret(_ value: String?, keychainKey: String, defaultsKey: String) {
+        if KeychainStore.set(value, forKey: keychainKey) {
+            // Also drops any legacy plaintext copy from before the migration.
+            defaults.removeObject(forKey: defaultsKey)
+        } else {
+            defaults.set(value, forKey: defaultsKey)
+            logger.warning("Keychain unavailable — secret kept in UserDefaults (plaintext)")
+        }
     }
     
     func reset() {
@@ -204,6 +234,12 @@ final class DoubleTapTalkSettings: ObservableObject {
         llmModel = "gpt-4o-mini"
         llmTemperature = 0.3
         useAppSpecificPolish = true  // Default to enabled
+        // Everything a user may have configured — a "reset" that leaves the
+        // base URL / key / system prompt / timeout behind is not a reset.
+        llmBaseURL = nil
+        llmAPIKey = nil
+        llmSystemPrompt = LLMSettings.default.systemPrompt
+        llmTimeout = 5.0
 
         // Reset cloud transcription settings
         asrEnabled = false

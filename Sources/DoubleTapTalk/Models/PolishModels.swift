@@ -324,7 +324,9 @@ struct AppContext {
         
         // Get the window title
         var titleRef: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(windowRef as! AXUIElement, kAXTitleAttribute as CFString, &titleRef) == .success,
+        guard let rawWindow = windowRef,
+              CFGetTypeID(rawWindow) == AXUIElementGetTypeID(),
+              AXUIElementCopyAttributeValue(rawWindow as! AXUIElement, kAXTitleAttribute as CFString, &titleRef) == .success,
               let title = titleRef as? String else {
             return nil
         }

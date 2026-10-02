@@ -63,7 +63,9 @@ final class RecordingFileWriter {
     private var handle: FileHandle?
     private var dataByteCount = 0
     private var closed = false
+    /// Guarded by `warnLock`: `append` runs on the audio tap thread.
     private var warnedAboutFormat = false
+    private let warnLock = NSLock()
 
     /// The directory recordings live in: ~/Library/Application Support/DoubleTapTalk/Recordings
     static func defaultDirectory() -> URL {
@@ -123,8 +125,11 @@ final class RecordingFileWriter {
               buffer.format.channelCount == 1,
               let data = buffer.floatChannelData,
               buffer.frameLength > 0 else {
-            if !warnedAboutFormat {
-                warnedAboutFormat = true
+            warnLock.lock()
+            let firstWarning = !warnedAboutFormat
+            warnedAboutFormat = true
+            warnLock.unlock()
+            if firstWarning {
                 logger.warning("RecordingFileWriter: skipping unsupported buffer format (expected Float32 mono)")
             }
             return

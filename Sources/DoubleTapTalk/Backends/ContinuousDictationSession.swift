@@ -152,7 +152,6 @@ final class ContinuousDictationSession {
     }
 
     var onLiveText: ((String) -> Void)?
-    var onFinalText: ((String) -> Void)?
     var onAudioLevel: ((Float) -> Void)?
     var onError: ((String) -> Void)?
     /// Delivered in segment order when a rotated segment ends. Each call is
@@ -313,11 +312,10 @@ final class ContinuousDictationSession {
             transcriptLock.unlock()
             observeBestText(best)
             settleIfClosing(hasFinalResult: isFinal, failed: false)
-            if isFinal {
-                session.onFinalText?(text)
-            } else {
-                session.onLiveText?(text)
-            }
+            // Committed results stream to the same live-text feed (the
+            // previous `onFinalText` hook had no subscribers, so finals were
+            // silently dropped).
+            session.onLiveText?(text)
         }
     }
 

@@ -16,6 +16,7 @@
 		4D18019C00F53EA80C8D3C0E /* SettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1F8906590DA4E7A4F022941 /* SettingsWindowController.swift */; };
 		6EF7C6837B2AE12C791EB6ED /* OverlayMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = C232BBF96AB595320BBBCA43 /* OverlayMetrics.swift */; };
 		704554D1F535E1109D32B3DA /* RecordingFileWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11BBD14466F5C91817D48534 /* RecordingFileWriter.swift */; };
+		735844EBA83E1BCDE8E8795F /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53F2B068E450993CD2708D27 /* KeychainStore.swift */; };
 		885506C747E7348F10D39A1B /* WaveformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D15A7716E4C4A101E43F839 /* WaveformView.swift */; };
 		8B3E4EED9E174D96802D0167 /* OverlayState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F0F430B038A9B5F66F20BB2 /* OverlayState.swift */; };
 		8FFA2661B9D3B4B7DF466688 /* LLMService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCF904CA137C20A1DEA9B59A /* LLMService.swift */; };
@@ -45,6 +46,7 @@
 		4257C1C6DA696CAB593F9588 /* OrderedTaskChain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrderedTaskChain.swift; sourceTree = "<group>"; };
 		4452828AC2D567127D5791CD /* OverlaySession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlaySession.swift; sourceTree = "<group>"; };
 		53D79246657B8C6808F0CEC4 /* PipelineError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PipelineError.swift; sourceTree = "<group>"; };
+		53F2B068E450993CD2708D27 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		580517CA1DE77BD9581EAACB /* LLMProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMProvider.swift; sourceTree = "<group>"; };
 		5B1288EFBEDCE17AE394B1BB /* TextInjectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextInjectionService.swift; sourceTree = "<group>"; };
 		614C2A53F6BE423DAEE8E7CA /* StatusBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarController.swift; sourceTree = "<group>"; };
@@ -131,6 +133,7 @@
 				20C905C9C730978287EBF24B /* AccessibilityService.swift */,
 				1C39F972B02531CE2DA58401 /* CloudTranscriptionService.swift */,
 				2DDBB70D68CC1A7D870D3115 /* HotkeyService.swift */,
+				53F2B068E450993CD2708D27 /* KeychainStore.swift */,
 				CCF904CA137C20A1DEA9B59A /* LLMService.swift */,
 				1A8F33F795AE6DF93EA56FF9 /* MicrophonePermissionService.swift */,
 				4257C1C6DA696CAB593F9588 /* OrderedTaskChain.swift */,
@@ -225,6 +228,7 @@
 				9A75BB952EC3200542642548 /* ContinuousDictationSession.swift in Sources */,
 				F94AFC359096B7512D596A46 /* DoubleTapTalkApp.swift in Sources */,
 				9266DA22F19DF21F44194AC2 /* HotkeyService.swift in Sources */,
+				735844EBA83E1BCDE8E8795F /* KeychainStore.swift in Sources */,
 				AA9177B7B27D2A9C12A91A04 /* LLMProvider.swift in Sources */,
 				8FFA2661B9D3B4B7DF466688 /* LLMService.swift in Sources */,
 				934F1F464337AD7BA187B16B /* MicrophonePermissionService.swift in Sources */,

@@ -44,6 +44,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Generation of the dictation currently being recorded (what `stop`
     /// finalizes).
     private var activeGeneration = 0
+    /// Generation of a start that is still in flight (permission prompts +
+    /// engine start). A stop tap landing in this window cancels the start
+    /// instead of being read as a stray, and only the start that owns this
+    /// window may hand the hotkey back to idle.
+    private var pendingStartGeneration: Int?
+    /// Strong ref so the settings window isn't released (with its window)
+    /// when `showSettings` returns.
+    private var settingsWindowController: SettingsWindowController?
     /// Inserted results of earlier segments in the current dictation session,
     /// fed into each refinement prompt for consistency (capped inside the prompt).
     private var segmentHistory: [String] = []
@@ -109,8 +117,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func showSettings() {
         logger.debug("Opening settings window")
-        let settingsWindow = SettingsWindowController()
-        settingsWindow.showWindow(nil)
+        if settingsWindowController == nil {
+            settingsWindowController = SettingsWindowController()
+        }
+        settingsWindowController?.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
     
@@ -138,7 +148,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func startRecording() {
         Task {
-            let generation = beginDictation()
+            // Never open a second mic: a live session here means the hotkey
+            // state machine desynced. Control tap again stops it instead.
+            guard relaySession == nil else {
+                logger.info("Start ignored — a relay session is already live")
+                return
+            }
+            // Refuses when a start is already in flight; records the pending
+            // window so a stop tap can cancel this start while it waits for
+            // permissions / engine start.
+            guard let generation = beginStart() else {
+                logger.info("Start ignored — a start is already in flight")
+                return
+            }
             resetSegmentHistory()
             // A new dictation always starts clean: a relay session that was
             // abandoned mid-finalize must not leave its summary armed for the
@@ -162,6 +184,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     await MainActor.run {
                         logger.error("Microphone permission denied — cannot record audio")
                         logger.info("Please grant permission in System Settings > Privacy & Security > Microphone")
+                        self.abortStart(generation: generation)
                         self.showPermissionDeniedAlert()
                         statusBarController?.updateState(.idle)
                     }
@@ -175,9 +198,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 await MainActor.run {
                     logger.error("Microphone permission already denied/restricted")
                     logger.info("Please grant permission in System Settings > Privacy & Security > Microphone")
+                    self.abortStart(generation: generation)
                     self.showPermissionDeniedAlert()
                     statusBarController?.updateState(.idle)
                 }
+                return
+            }
+            // A stop tap (cancelPendingStart) or a superseding start may have
+            // invalidated us while the permission prompt was up.
+            guard isCurrentGeneration(generation) else {
+                logger.info("Start \(generation) cancelled while waiting for permissions — aborting")
+                await MainActor.run { statusBarController?.updateState(.idle) }
                 return
             }
             // Proceed with recording — the relay (continuous) engine is the one
@@ -187,6 +218,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } catch {
                 await MainActor.run {
                     logger.info("Failed to start recording: \(error)")
+                    self.abortStart(generation: generation)
                     recordingOverlay.showError()
                     statusBarController?.updateState(.error)
                 }
@@ -237,6 +269,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard await SpeechPermission.request() else {
             await MainActor.run {
                 logger.error("Speech recognition permission denied")
+                self.abortStart(generation: generation)
                 self.showSpeechPermissionDeniedAlert()
                 statusBarController?.updateState(.idle)
             }
@@ -265,8 +298,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         logger.info("Input method language: \(inputMethodLang ?? "unknown")")
 
+        // Last cancellation point before the engine opens.
+        guard isCurrentGeneration(generation) else {
+            logger.info("Start \(generation) cancelled before the mic opened — aborting")
+            await MainActor.run { statusBarController?.updateState(.idle) }
+            return
+        }
+
         try session.start(language: DoubleTapTalkSettings.shared.language, inputMethodLanguage: inputMethodLang)
         relaySession = session
+        guard isCurrentGeneration(generation) else {
+            // The stop tap landed while the engine was starting: close the
+            // session again. An orphaned session would keep rotating segments
+            // and injecting text with no way to stop it.
+            relaySession = nil
+            logger.info("Start \(generation) cancelled while opening the mic — closing it again")
+            Task { _ = await session.stop() }
+            await MainActor.run {
+                self.abortStart(generation: generation)
+                self.statusBarController?.updateState(.idle)
+            }
+            return
+        }
+        finishStart(generation)
         relayIsFinalizing = false
         relaySegmentsInserted = 0
         relaySessionChars = 0
@@ -294,10 +348,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyService?.clearRecording()
         relaySession = nil
         relayIsFinalizing = true
+        // Captured before the drain: a newer session must not be closed by
+        // this stale stop.
+        let generation = generationSnapshot()
         statusBarController?.markRelayFinalizing()
         Task {
             await session.stopDiscardingActive()
-            await MainActor.run { self.completeRelaySession() }
+            await MainActor.run {
+                guard self.isCurrentGeneration(generation) else {
+                    self.logger.info("Backspace stop of session \(generation) overlapped a newer session — summary skipped")
+                    return
+                }
+                self.completeRelaySession()
+            }
         }
     }
 
@@ -330,8 +393,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // whole session; already-rotated segments are inserted in order before
         // the final segment is refined + injected.
         guard let session = relaySession else {
-            // A stray stop tap with no live session: nothing to finalize.
-            logger.info("Stop tap with no live relay session — ignored")
+            if cancelPendingStart() {
+                // The stop tap landed while the start was still in flight
+                // (permission prompt / engine start): invalidate it so no mic
+                // opens after the user already said stop.
+                logger.info("Stop tap during a pending start — cancelling it")
+            } else {
+                logger.info("Stop tap with no live relay session — ignored")
+            }
             statusBarController?.updateState(.idle)
             return
         }
@@ -348,14 +417,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Dictation generations
 
-    /// Starts a new dictation session and returns its generation id.
-    @discardableResult
-    private func beginDictation() -> Int {
+    /// Prepares a new dictation: bumps the generation AND records the start as
+    /// pending. Returns nil when a start is already in flight — a refused
+    /// start never bumps the generation (that would drop the previous
+    /// session's still-processing segments for nothing).
+    private func beginStart() -> Int? {
         relayLock.lock()
         defer { relayLock.unlock() }
+        if pendingStartGeneration != nil { return nil }
         dictationGeneration += 1
         activeGeneration = dictationGeneration
+        pendingStartGeneration = dictationGeneration
         return dictationGeneration
+    }
+
+    /// The mic is open: the pending-start window is over.
+    private func finishStart(_ generation: Int) {
+        relayLock.lock()
+        defer { relayLock.unlock() }
+        if pendingStartGeneration == generation { pendingStartGeneration = nil }
+    }
+
+    /// Cancels a start that is still in flight (everything it awaits checks
+    /// `isCurrentGeneration`). Returns true when there was one to cancel.
+    private func cancelPendingStart() -> Bool {
+        relayLock.lock()
+        defer { relayLock.unlock() }
+        guard pendingStartGeneration != nil else { return false }
+        pendingStartGeneration = nil
+        dictationGeneration += 1
+        activeGeneration = dictationGeneration
+        return true
+    }
+
+    /// A start cannot continue (permission denied, engine failure). Hands the
+    /// hotkey back to idle — but only when THIS start still owns the pending
+    /// window: a superseded start must never clear the newer session's state.
+    private func abortStart(generation: Int) {
+        relayLock.lock()
+        let ownsPending = pendingStartGeneration == generation
+        if ownsPending { pendingStartGeneration = nil }
+        relayLock.unlock()
+        if ownsPending { hotkeyService?.clearRecording() }
     }
 
     /// Generation of the dictation currently being recorded. `stopRecording`
@@ -432,11 +535,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Single injection point: both the classic finalize() flow and relay
     /// intermediate segments land text here (PolishProcessor is the single
-    /// polish point feeding it — see AGENTS.md). Reports which app the text
-    /// went into, so an injection drifting to the wrong window is traceable.
-    private func inject(_ text: String) {
-        let target = NSWorkspace.shared.frontmostApplication?.localizedName ?? "unknown"
-        logger.info("Injecting \(text.count) chars into \(target): \(text)")
+    /// polish point feeding it — see AGENTS.md).
+    ///
+    /// `expectedTarget` is the app that was frontmost when the polish pass
+    /// read its context: cloud ASR + refinement + the reveal delay add
+    /// seconds, and the user may switch apps meanwhile — if they did, say so
+    /// in the log instead of silently pasting into the wrong window.
+    private func inject(_ text: String, expectedTarget: NSRunningApplication? = nil) {
+        let current = NSWorkspace.shared.frontmostApplication
+        let target = current?.localizedName ?? "unknown"
+        if let expected = expectedTarget, let current,
+           expected.processIdentifier != current.processIdentifier {
+            logger.warning("Injection target drifted — polished for \(expected.localizedName ?? "unknown") (pid \(expected.processIdentifier)) but frontmost is now \(target) (pid \(current.processIdentifier))")
+        }
+        // Truncated: the full dictated text would otherwise sit unbounded in
+        // the log (privacy + rotation cost).
+        let preview = String(text.prefix(200)) + (text.count > 200 ? "…" : "")
+        logger.info("Injecting \(text.count) chars into \(target): \(preview)")
         textInjectionService?.injectText(text)
         NSSound(named: "Pop")?.play()
     }
@@ -456,6 +571,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var text = result.text
         let asr = ASRSettings.current()
         var cloudMs = 0
+        /// App that was frontmost when the polish pass read its context
+        /// (set below); handed to inject() to detect target drift.
+        var injectTarget: NSRunningApplication? = nil
         if asr.enabled, let url = result.recordingFileURL {
             await MainActor.run { self.recordingOverlay.showTranscribing() }
             let cloudBegan = Date()
@@ -473,6 +591,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         var polishMs = 0
         if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             await MainActor.run { self.recordingOverlay.showPolishing() }
+            // The app the polish pass will read its context from — inject()
+            // re-checks it at injection time.
+            let polishTarget = NSWorkspace.shared.frontmostApplication
             let polishBegan = Date()
             text = await PolishProcessor().process(
                 rawText: text,
@@ -480,7 +601,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 previousSegments: segmentHistorySnapshot()
             )
             polishMs = Int(Date().timeIntervalSince(polishBegan) * 1000)
+            injectTarget = polishTarget
         }
+        let expectedTarget = injectTarget
 
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             // Recognized but never inserted: the session HUD must say so, or the
@@ -506,7 +629,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.relaySessionChars += characterCount
             self.recordingOverlay.noteSegmentInserted(characters: characterCount)
             self.statusBarController?.updateRelayProgress(segments: self.relaySegmentsInserted)
-            self.inject(toInject)
+            self.inject(toInject, expectedTarget: expectedTarget)
             self.logger.info("Relay segment \(self.relaySegmentsInserted) injected in \(totalMs)ms (cloud \(cloudMsFinal)ms · polish \(polishMsFinal)ms · \(characterCount) chars)")
         }
     }
@@ -551,6 +674,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        // The app the polish pass will read its context from — inject()
+        // re-checks it at injection time.
+        let polishTarget = NSWorkspace.shared.frontmostApplication
         let text = await PolishProcessor().process(
             rawText: rawText,
             settings: LLMSettings.current(),
@@ -582,7 +708,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
             if !text.isEmpty {
-                self.inject(text)
+                self.inject(text, expectedTarget: polishTarget)
             } else {
                 logger.info("Empty or nil text result")
             }
@@ -620,56 +746,97 @@ enum LogLevel: String {
 class FileLogger: @unchecked Sendable {
     static let shared = FileLogger()
     private let logURL: URL
+    /// Previous log generation, after a rotation (kept for one cycle).
+    private let rotatedLogURL: URL
     private let queue = DispatchQueue(label: "com.doubletaptalk.logger", attributes: .concurrent)
-    
+    /// Append handle kept open between writes: one small write per line
+    /// instead of read-whole-file + rewrite (which made logging O(n²) as the
+    /// unbounded log grew).
+    private var handle: FileHandle?
+    private var handleSize: Int64 = 0
+    /// Rotate the active log once it passes this size; the previous
+    /// generation is kept as `DoubleTapTalk.log.1`.
+    private let maxLogBytes: Int64 = 4 * 1024 * 1024
+
     init() {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         logURL = caches.appendingPathComponent("DoubleTapTalk.log")
+        rotatedLogURL = caches.appendingPathComponent("DoubleTapTalk.log.1")
         info("=== Logger initialized, log file: \(logURL.path) ===")
     }
-    
+
     func info(_ message: String) {
         writeLog(message, level: .info)
     }
-    
+
     func debug(_ message: String) {
         writeLog(message, level: .debug)
     }
-    
+
     func warning(_ message: String) {
         writeLog(message, level: .warning)
     }
-    
+
     func error(_ message: String) {
         writeLog(message, level: .error)
     }
-    
+
     private func writeLog(_ message: String, level: LogLevel) {
         queue.async(flags: .barrier) { [weak self] in
             guard let self = self else { return }
-            
+
             let timestamp = ISO8601DateFormatter().string(from: Date())
             let thread = Thread.isMainThread ? "[Main]" : "[BgThread]"
             let line = "[\(timestamp)] [\(level.rawValue)] \(thread) \(message)\n"
-            
-            var content = ""
-            if let existing = try? String(contentsOf: self.logURL, encoding: .utf8) {
-                content = existing
-            }
-            content += line
-            
-            try? content.write(to: self.logURL, atomically: true, encoding: .utf8)
+            self.append(Data(line.utf8))
             print("[\(level.rawValue)] \(message)")
         }
     }
-    
-    func clear() {
-        queue.async(flags: .barrier) { [weak self] in
-            try? "".write(to: self!.logURL, atomically: true, encoding: .utf8)
+
+    /// Runs on `queue` (barrier): append-only write + size-triggered rotation.
+    private func append(_ data: Data) {
+        let fm = FileManager.default
+        if handle == nil {
+            if !fm.fileExists(atPath: logURL.path) {
+                fm.createFile(atPath: logURL.path, contents: nil)
+            }
+            handle = FileHandle(forWritingAtPath: logURL.path)
+            handle?.seekToEndOfFile()
+            handleSize = (try? fm.attributesOfItem(atPath: logURL.path)[.size] as? Int64) ?? 0
+        }
+        do {
+            try handle?.write(contentsOf: data)
+            handleSize += Int64(data.count)
+        } catch {
+            // Disk full / handle broken: drop the line rather than crash the caller.
+            handle = nil
+            return
+        }
+        if handleSize >= maxLogBytes {
+            rotate()
         }
     }
-    
-    func getLogContent() -> String {
-        return (try? String(contentsOf: logURL, encoding: .utf8)) ?? ""
+
+    /// Runs on `queue` (barrier): close, move the active log aside, start fresh.
+    private func rotate() {
+        closeHandle()
+        let fm = FileManager.default
+        try? fm.removeItem(at: rotatedLogURL)
+        try? fm.moveItem(at: logURL, to: rotatedLogURL)
+        handleSize = 0
+    }
+
+    private func closeHandle() {
+        try? handle?.close()
+        handle = nil
+    }
+
+    func clear() {
+        queue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            self.closeHandle()
+            try? "".write(to: self.logURL, atomically: true, encoding: .utf8)
+            self.handleSize = 0
+        }
     }
 }

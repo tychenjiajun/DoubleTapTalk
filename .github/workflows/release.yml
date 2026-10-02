@@ -19,6 +19,11 @@ jobs:
         with:
           swift-version: '5.9'
       
+      - name: Run tests
+        # Prompt-eval tests skip without OPENROUTER_API_KEY, so this stays
+        # green offline — but a red unit test now blocks the release.
+        run: swift test
+      
       - name: Build with Swift Package Manager
         run: |
           swift build -c release

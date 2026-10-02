@@ -101,7 +101,8 @@ final class MicrophonePermissionService {
         )
         
         guard nameStatus == noErr, let name else { return nil }
-        return name.takeRetainedValue() as String
+        // Get-property: the system owns the string — don't over-retain it.
+        return name.takeUnretainedValue() as String
     }
     
     /// Get human-readable description of current permission status

@@ -33,6 +33,13 @@ final class AccessibilityService {
             return nil 
         }
         
+        // CFTypeRef → AXUIElement: Swift treats the conditional downcast as an
+        // unconditional coercion (it won't even compile), so verify the
+        // dynamic type ourselves before trusting it.
+        guard CFGetTypeID(focused) == AXUIElementGetTypeID() else {
+            logger.debug("Focused element is not an AXUIElement")
+            return nil
+        }
         let element = focused as! AXUIElement
         
         // Try kAXValueAttribute first (text fields, text areas)
@@ -80,7 +87,12 @@ final class AccessibilityService {
         }
         
         // Walk the AX tree to find the terminal text content
-        guard let fullBuffer = findTerminalTextArea(in: window as! AXUIElement) else {
+        guard CFGetTypeID(window) == AXUIElementGetTypeID() else {
+            logger.debug("Focused window is not an AXUIElement")
+            return nil
+        }
+        let windowElement = window as! AXUIElement
+        guard let fullBuffer = findTerminalTextArea(in: windowElement) else {
             logger.debug("Could not find terminal text area")
             return nil
         }
@@ -93,51 +105,56 @@ final class AccessibilityService {
         return lastLines.isEmpty ? nil : lastLines
     }
     
-    /// Recursively search for terminal text area in the accessibility tree
-    private func findTerminalTextArea(in element: AXUIElement) -> String? {
-        // Check if this element has text content we can read
-        if let text = extractTextFromElement(element) {
-            return text
-        }
-        
-        // Recurse into children
-        var childrenRef: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenRef) == .success,
-              let children = childrenRef as? [AXUIElement] else { return nil }
-        
-        for child in children {
-            if let found = findTerminalTextArea(in: child) {
-                return found
-            }
-        }
-        
-        return nil
+    /// Recursively searches the tree for the terminal's text content.
+    ///
+    /// Two passes, in order:
+    /// 1. the first non-empty `kAXValue` (the actual scrollback / textarea),
+    /// 2. only if none exists, `kAXDescription`/`kAXTitle`.
+    ///
+    /// The window itself is never matched: a terminal window always has a
+    /// title ("zsh — 80×24"), so probing it first used to return the title
+    /// and never recurse into the buffer at all. The walk is bounded (depth
+    /// and node budget) so a huge UI tree can't stall the polish pass.
+    private func findTerminalTextArea(in root: AXUIElement) -> String? {
+        if let value = firstText(in: root, matching: .value) { return value }
+        return firstText(in: root, matching: .descriptionOrTitle)
     }
-    
-    /// Try to extract text from a single element
-    private func extractTextFromElement(_ element: AXUIElement) -> String? {
-        // First try kAXValueAttribute
-        var valueRef: CFTypeRef?
-        if AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &valueRef) == .success,
-           let text = valueRef as? String, !text.isEmpty {
-            return text
+
+    private enum TextAttribute { case value, descriptionOrTitle }
+
+    private func firstText(in root: AXUIElement, matching kind: TextAttribute) -> String? {
+        let maxDepth = 30
+        let maxNodes = 500
+        var visited = 0
+
+        func walk(_ element: AXUIElement, isRoot: Bool, depth: Int) -> String? {
+            visited += 1
+            guard depth <= maxDepth, visited <= maxNodes else { return nil }
+            if !isRoot {
+                switch kind {
+                case .value:
+                    if let text = element.copyAttributeValue(kAXValueAttribute as CFString) as? String, !text.isEmpty {
+                        return text
+                    }
+                case .descriptionOrTitle:
+                    if let text = element.copyAttributeValue(kAXDescriptionAttribute as CFString) as? String, !text.isEmpty {
+                        return text
+                    }
+                    if let text = element.copyAttributeValue(kAXTitleAttribute as CFString) as? String, !text.isEmpty {
+                        return text
+                    }
+                }
+            }
+            var childrenRef: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenRef) == .success,
+                  let children = childrenRef as? [AXUIElement] else { return nil }
+            for child in children {
+                if let found = walk(child, isRoot: false, depth: depth + 1) { return found }
+            }
+            return nil
         }
-        
-        // Try kAXDescription for some terminal emulators
-        var descRef: CFTypeRef?
-        if AXUIElementCopyAttributeValue(element, kAXDescriptionAttribute as CFString, &descRef) == .success,
-           let desc = descRef as? String, !desc.isEmpty {
-            return desc
-        }
-        
-        // Try kAXTitle
-        var titleRef: CFTypeRef?
-        if AXUIElementCopyAttributeValue(element, kAXTitleAttribute as CFString, &titleRef) == .success,
-           let title = titleRef as? String, !title.isEmpty {
-            return title
-        }
-        
-        return nil
+
+        return walk(root, isRoot: true, depth: 0)
     }
     
     /// Capture context from an application's focused element
@@ -149,6 +166,7 @@ final class AccessibilityService {
         guard AXUIElementCopyAttributeValue(axApp, kAXFocusedUIElementAttribute as CFString, &focusedRef) == .success,
               let focused = focusedRef else { return nil }
         
+        guard CFGetTypeID(focused) == AXUIElementGetTypeID() else { return nil }
         let element = focused as! AXUIElement
         
         // Get role

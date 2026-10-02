@@ -24,6 +24,7 @@ let package = Package(
                 "Services/AccessibilityService.swift",
                 "Services/CloudTranscriptionService.swift",
                 "Services/HotkeyService.swift",
+                "Services/KeychainStore.swift",
                 "Services/LLMService.swift",
                 "Services/MicrophonePermissionService.swift",
                 "Services/OrderedTaskChain.swift",

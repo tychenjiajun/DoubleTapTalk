@@ -118,7 +118,8 @@ final class LLMService {
             model: settings.model,
             systemPrompt: systemPrompt,
             userContent: userContent,
-            baseURL: settings.baseURL
+            baseURL: settings.baseURL,
+            temperature: settings.temperature
         )
         
         logger.info("Polished text (first 200 chars): \(response.prefix(200))\(response.count > 200 ? "..." : "")")
@@ -137,7 +138,8 @@ final class LLMService {
             model: settings.model,
             systemPrompt: settings.systemPrompt,
             userContent: text,
-            baseURL: settings.baseURL
+            baseURL: settings.baseURL,
+            temperature: settings.temperature
         )
         
         logger.info("Polished text (first 100 chars): \(response.prefix(100))\(response.count > 100 ? "..." : "")")
@@ -162,15 +164,16 @@ final class LLMService {
         model: String,
         systemPrompt: String,
         userContent: String,
-        baseURL: String? = nil
+        baseURL: String? = nil,
+        temperature: Double
     ) async throws -> String {
         switch provider {
         case .openai:
-            return try await callOpenAI(apiKey: apiKey, model: model, systemPrompt: systemPrompt, userContent: userContent, baseURL: baseURL)
+            return try await callOpenAI(apiKey: apiKey, model: model, systemPrompt: systemPrompt, userContent: userContent, baseURL: baseURL, temperature: temperature)
         case .anthropic:
-            return try await callAnthropic(apiKey: apiKey, model: model, systemPrompt: systemPrompt, userContent: userContent)
+            return try await callAnthropic(apiKey: apiKey, model: model, systemPrompt: systemPrompt, userContent: userContent, temperature: temperature)
         case .google:
-            return try await callGoogle(apiKey: apiKey, model: model, systemPrompt: systemPrompt, userContent: userContent)
+            return try await callGoogle(apiKey: apiKey, model: model, systemPrompt: systemPrompt, userContent: userContent, temperature: temperature)
         }
     }
     
@@ -179,10 +182,12 @@ final class LLMService {
         model: String,
         systemPrompt: String,
         userContent: String,
-        baseURL: String? = nil
+        baseURL: String? = nil,
+        temperature: Double
     ) async throws -> String {
-        // Use custom base URL if provided, otherwise use default
-        let urlStr = baseURL?.trimmingCharacters(in: .whitespaces) != nil ? baseURL! : "https://api.openai.com/v1/chat/completions"
+        // Use custom base URL if provided (and non-blank), otherwise default.
+        let trimmedBase = baseURL?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let urlStr = (trimmedBase?.isEmpty == false) ? trimmedBase! : "https://api.openai.com/v1/chat/completions"
         guard var urlComponents = URLComponents(string: urlStr) else { throw URLError(.badURL) }
         
         // Ensure endpoint exists in URL
@@ -203,7 +208,7 @@ final class LLMService {
                 ["role": "system", "content": systemPrompt],
                 ["role": "user", "content": userContent]
             ],
-            "temperature": 0.3
+            "temperature": temperature
         ]
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -269,20 +274,25 @@ final class LLMService {
         apiKey: String,
         model: String,
         systemPrompt: String,
-        userContent: String
+        userContent: String,
+        temperature: Double
     ) async throws -> String {
         let urlStr = "https://api.anthropic.com/v1/messages"
         guard let url = URL(string: urlStr) else { throw URLError(.badURL) }
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        // Anthropic authenticates API keys with x-api-key; `Authorization:
+        // Bearer` is only accepted for OAuth tokens, so a plain sk-ant-… key
+        // used to 401 here and silently fall back to the raw transcript.
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         
         let body: [String: Any] = [
             "model": model,
             "max_tokens": 4096,
+            "temperature": temperature,
             "system": systemPrompt,
             "messages": [
                 ["role": "user", "content": userContent]
@@ -315,14 +325,30 @@ final class LLMService {
         apiKey: String,
         model: String,
         systemPrompt: String,
-        userContent: String
+        userContent: String,
+        temperature: Double
     ) async throws -> String {
-        let urlStr = "\(model):generateContent?key=\(apiKey)"
+        // The model field accepts a bare id ("gemini-1.5-flash"), a
+        // "models/…" path, or a full resource URL — all land on
+        // :generateContent. Building "\(model):generateContent" from a bare
+        // id used to produce a RELATIVE URL (unsupported URL → silent
+        // fallback to the raw transcript).
+        let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        let urlStr: String
+        if trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") {
+            urlStr = trimmed.hasSuffix(":generateContent") ? trimmed : "\(trimmed):generateContent"
+        } else {
+            let name = trimmed.hasPrefix("models/") ? trimmed : "models/\(trimmed)"
+            urlStr = "https://generativelanguage.googleapis.com/v1beta/\(name):generateContent"
+        }
         guard let url = URL(string: urlStr) else { throw URLError(.badURL) }
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Header instead of ?key= — keeps the key out of the URL (and out of
+        // any log that ever prints one).
+        request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
         
         // Google Gemini API requires system instruction to be separate from content
         // Use system_instruction parameter instead of embedding it in user text
@@ -338,7 +364,7 @@ final class LLMService {
                 ]
             ] as [String: Any],
             "generationConfig": [
-                "temperature": 0.3
+                "temperature": temperature
             ]
         ]
         
