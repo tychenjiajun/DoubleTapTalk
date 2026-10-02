@@ -41,13 +41,13 @@ DoubleTapTalk transforms how you interact with your Mac. Instead of typing, **sp
 
 #### 🎙️ Core Speech Recognition
 - **Double-Tap Activation**: Simple Control+Control gesture to start recording
-- **Simple Stop**: Single-click Control to stop — AI refinement applies **automatically** whenever it's enabled
+- **Simple Stop**: Single-click Control **or press Backspace** — Backspace stops *and* discards the segment you were still saying (deleting keeps working), so "I'm done editing" is one natural key; double-tap Control restarts. AI refinement applies **automatically** whenever it's enabled
 - **Multi-Language Support**: Auto-detect from 100+ languages or manually select
 - **Zero Setup**: No API keys, no accounts, no configuration
 - **Menu Bar Design**: Runs quietly without Dock icon clutter
 - **⚡ Streaming Live Text** (Apple backend): watch your words appear live as you speak
-- **🎛️ Recording Overlay**: frameless capsule with real-time waveform, a live recording-seconds counter, and live transcription. It widens as you speak and, for long sentences, wraps to up to 4 lines (the capsule grows taller) instead of truncating. Every pipeline stage has its own look — live bars while you speak, a travelling bump while it uploads or polishes, and a check / mic-slash / warning symbol with a matching accent border for the result, "no speech", and failure cases.
-- **🔁 Continuous Dictation (Relay, opt-in)**: with the toggle enabled in Settings, the mic stays open the whole time — after a pause (default 3 s, configurable) the current segment is recognized + inserted and a new one starts, so you can dictate long passages with thinking breaks. Segments with no words recognized by Apple are skipped entirely — blank audio is never kept or uploaded to cloud ASR.
+- **🎛️ Recording Overlay**: while dictation runs, the capsule is a fixed-height status HUD (frameless, bottom-center): one dimmed line of in-progress Apple live text, a live waveform while you speak, a segment/status column (`第 3 段`, `云端转写中…`, `✓ 已插入 · 24 字`, `无语音，已跳过`, `⚠︎ 1 段未插入`), and an elapsed clock that dims until you've actually been talking. It collapses to a slim pill after ~8 s of silence and expands on the first word. Every pipeline stage has its own look — live bars while speaking, a travelling bump while the cloud transcribes or polishes, a checkmark with a green border on insert, orange/red accents for skips and failures.
+- **🔁 Continuous Dictation (the only mode)**: the mic stays open the whole time — after a pause (default 3 s, configurable in Settings) the current segment is recognized + inserted and a new one starts, so you can dictate long passages with thinking breaks. Idle detection uses **waveform voice activity** (not recognition text), so a configured pause is a real pause, not pause + recognizer latency. Segments with no words recognized are skipped entirely — blank audio is never kept or uploaded to cloud ASR.
 - **🧾 Segment Receipts (Relay)**: while a relay session runs, the capsule becomes a fixed-height status HUD (placement unchanged): one dimmed line of in-progress words plus a column showing the segment counter, elapsed time, and what just happened — `识别中…`, `✓ 已插入 · 24 字`, `无语音，已跳过`, and a persistent `⚠︎ N 段未插入` chip if a recognized segment never made it into the document. After ~8 s of silence it collapses to a slim pill and expands again the moment you speak. Ending the session shows a receipt (`✓ 7 段 · 312 字 · 1:42`), and the menu bar carries a live `连续听写中 · 第 3 段 · 1:42` header with an **End Continuous Dictation** item.
 - **🌩️ Cloud Transcription (optional)**: when enabled, the recording is saved as a WAV file and sent to an OpenAI-compatible ASR endpoint (e.g. Aliyun DashScope `qwen3-asr-flash`); any failure falls back to Apple's on-device result. With the feature off, no audio is ever written to disk.
 
@@ -200,8 +200,8 @@ Click ⚙️ **Settings** in menu bar (or press ⌘,):
 - **System Prompt**: Customize polishing behavior per application
 
 #### ⌨️ Hotkey Behavior
-- **Start Recording**: Double-click Control (configurable)
-- **Stop**: Single-click Control or the menu bar button — every segment (including the final one) is refined automatically when AI refinement is enabled
+- **Start**: Double-click Control — the mic stays open, segments are recognized + inserted automatically as you pause
+- **Stop**: Single-click Control, or **Backspace** (discards the live segment — nothing more lands), or the menu bar button. Every segment is refined automatically when AI refinement is enabled
 
 **Customization**: Modify trigger keys in source code and rebuild if needed.
 

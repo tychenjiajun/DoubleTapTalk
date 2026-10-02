@@ -28,7 +28,6 @@ final class DoubleTapTalkSettings: ObservableObject {
         static let asrAPIKey = "ASRAPIKey"
         static let asrModel = "ASRModel"
         // Continuous dictation (relay) keys
-        static let relayEnabled = "RelayEnabled"
         static let relayIdleThreshold = "RelayIdleThreshold"
     }
     
@@ -143,16 +142,12 @@ final class DoubleTapTalkSettings: ObservableObject {
 
     // MARK: - Continuous Dictation (Relay) Settings
 
-    /// When on, the microphone stays open across segments: after `relayIdleThreshold`
-    /// seconds without new words the current segment is recognized + inserted and
-    /// a new one starts — one long dictation with thinking pauses in between.
-    @Published var relayEnabled: Bool {
-        didSet {
-            defaults.set(relayEnabled, forKey: Keys.relayEnabled)
-            logger.info("Settings: Continuous dictation \(relayEnabled ? "enabled" : "disabled")")
-        }
-    }
+    // MARK: - Continuous Dictation (Relay) Settings
 
+    /// The microphone stays open across segments: after `relayIdleThreshold`
+    /// seconds without new words the current segment is recognized + inserted
+    /// and a new one starts — one long dictation with thinking pauses in
+    /// between. Continuous dictation is the ONLY mode (relay is always on).
     @Published var relayIdleThreshold: Double {
         didSet {
             defaults.set(relayIdleThreshold, forKey: Keys.relayIdleThreshold)
@@ -193,7 +188,6 @@ final class DoubleTapTalkSettings: ObservableObject {
         // Load continuous dictation settings. Relay is OPT-IN (default OFF):
         // it changes the core UX (mic stays open, auto-split + auto-insert),
         // so existing users must not get it on upgrade without asking.
-        self.relayEnabled = defaults.bool(forKey: Keys.relayEnabled)
         let relayThreshold = defaults.double(forKey: Keys.relayIdleThreshold)
         self.relayIdleThreshold = relayThreshold > 0.0 ? relayThreshold : 3.0
 
@@ -218,7 +212,6 @@ final class DoubleTapTalkSettings: ObservableObject {
         asrAPIKey = nil
 
         // Reset continuous dictation settings
-        relayEnabled = false
         relayIdleThreshold = 3.0
     }
 }

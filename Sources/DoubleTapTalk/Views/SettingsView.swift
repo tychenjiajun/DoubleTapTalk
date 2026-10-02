@@ -55,34 +55,22 @@ struct SettingsView: View {
             
             // MARK: - Continuous Dictation Section
             Section {
-                Toggle(isOn: $settings.relayEnabled) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Continuous dictation (relay)")
-                            .fontWeight(.medium)
-                        Text("Keep the microphone open the whole time. After a pause without new words, the current segment is recognized and inserted automatically, and a new segment starts — so you can dictate a long passage with thinking breaks in between.")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                if settings.relayEnabled {
-                    HStack {
-                        Text("Segment idle threshold:")
-                        Spacer()
-                        Text(String(format: "%.1fs", settings.relayIdleThreshold))
-                            .monospacedDigit()
-                            .foregroundColor(.secondary)
-                        Slider(value: $settings.relayIdleThreshold, in: 1.0...10.0, step: 0.5)
-                            .frame(width: 150)
-                    }
-                    Text("How long Apple must hear no new words before the segment is cut and inserted. Shorter = snappier, longer = fewer splits.")
-                        .font(.caption2)
+                HStack {
+                    Text("Segment idle threshold:")
+                    Spacer()
+                    Text(String(format: "%.1fs", settings.relayIdleThreshold))
+                        .monospacedDigit()
                         .foregroundColor(.secondary)
+                    Slider(value: $settings.relayIdleThreshold, in: 1.0...10.0, step: 0.5)
+                        .frame(width: 150)
                 }
+                Text("How long Apple must hear no new words before the segment is cut and inserted. Shorter = snappier, longer = fewer splits.")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
             } header: {
                 Text("Continuous Dictation")
             } footer: {
-                Text(settings.relayEnabled ? "Each segment is uploaded for cloud transcription (if enabled) and inserted automatically; live text during dictation stays Apple on-device. The microphone stays open from the starting double-tap until the next Control tap stops the session." : "Off: one segment per recording — double-click Control to start, single-click to stop.")
+                Text("Double-click Control to start — the microphone stays open and segments are recognized + inserted automatically as you pause. Backspace or a Control tap stops the session; the key still deletes normally. Each segment is uploaded for cloud transcription when enabled.")
                     .font(.caption)
             }
 

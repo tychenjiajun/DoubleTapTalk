@@ -142,7 +142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             resetSegmentHistory()
             // A new dictation always starts clean: a relay session that was
             // abandoned mid-finalize must not leave its summary armed for the
-            // next one-shot dictation.
+            // next dictation.
             relayIsFinalizing = false
             relaySegmentsInserted = 0
             relaySessionChars = 0
@@ -284,9 +284,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Backspace while a relay session is live: stop AND discard the active
     /// segment, then close the session for real. The user is editing the
-    /// document — nothing more may land in it. Only relay mode answers this;
-    /// a one-shot dictation's Backspace is the user's own editing (or tap
-    /// noise), and `relaySession == nil` filters it out.
+    /// document — nothing more may land in it. `relaySession == nil` (no live
+    /// session, or a stray Backspace) is filtered out here.
     private func stopRelayViaBackspace() {
         guard let session = relaySession else { return }
         relaySession = nil
@@ -591,7 +590,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 // A relay session closes with a receipt: how much landed, how
                 // long it took, what never made it in. Stopping a long session
-                // must not look like a one-shot dictation.
+                // must not look like a plain dictation.
                 self.completeRelaySession()
             } else {
                 self.recordingOverlay.dismiss()
