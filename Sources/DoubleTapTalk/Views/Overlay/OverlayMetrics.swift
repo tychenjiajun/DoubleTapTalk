@@ -13,9 +13,54 @@ struct OverlayMetrics {
     /// Long text wraps instead of truncating — the capsule grows vertically.
     static let maxLines = 4
     static let lineHeight: CGFloat = 20
+    /// Capsule padding and slot sizes. Every width in this file is derived from
+    /// these, so the view and the math can never disagree.
+    static let horizontalPadding: CGFloat = 24
+    static let waveformSlot: CGFloat = 44
+    static let stackGap: CGFloat = 14
+    static let timerSlot: CGFloat = 42
     /// Fixed non-text space inside the capsule: horizontal padding + waveform
     /// + timer + gaps.
-    static let internalPadding: CGFloat = 162
+    static let internalPadding: CGFloat =
+        horizontalPadding * 2 + waveformSlot + timerSlot + stackGap * 2
+
+    // MARK: - Continuous dictation (session) layout
+
+    /// A relay session keeps the capsule on screen for minutes, so it is a
+    /// fixed-height HUD: the text row never wraps, and the whole capsule
+    /// collapses to a slim pill once the user stops talking.
+    static let sessionHeight: CGFloat = 56
+    static let sessionCompactHeight: CGFloat = 44
+    /// Trailing column: elapsed clock on top, segment status underneath.
+    static let sessionTrailingWidth: CGFloat = 92
+    /// Hard floor of the session layout: the capsule can never be narrower than
+    /// waveform + status column + padding + gaps, whatever the text does.
+    static let sessionLayoutMinimumWidth: CGFloat =
+        horizontalPadding * 2 + waveformSlot + sessionTrailingWidth + stackGap * 2
+    /// The slim pill the persistent HUD collapses to: this floor, at a reduced
+    /// height. The text row is squeezed out by the constraints themselves.
+    static let sessionCompactWidth: CGFloat = sessionLayoutMinimumWidth
+    /// The focused layout reserves `timerSlot` at the trailing edge; the
+    /// session column is wider, so the text area shrinks by this much.
+    static let sessionTrailingExtra: CGFloat = sessionTrailingWidth - timerSlot
+    static let sessionInternalPadding: CGFloat = internalPadding + sessionTrailingExtra
+
+    /// Elapsed silence after which the session capsule shrinks out of the way.
+    /// Tied to the rotation threshold so a pause that is *about* to become a
+    /// segment does not also collapse the HUD.
+    static func compactIdleThreshold(idleThreshold: TimeInterval) -> TimeInterval {
+        max(idleThreshold * 2, 8)
+    }
+
+    /// Session capsule width for `text` (1 line, tail-truncated).
+    /// `trailingExtra` is the width the status column steals from the text row;
+    /// pass 0 when that column is hidden (the closing summary) so the text gets
+    /// the room back instead of being truncated.
+    static func sessionWidth(for text: String,
+                             trailingExtra: CGFloat = sessionTrailingExtra) -> CGFloat {
+        let width = estimatedTextWidth(for: text) + internalPadding + trailingExtra
+        return min(max(width, sessionCompactWidth), maxWidth)
+    }
 
     /// Estimated rendered width of `text`. Ideographic glyphs (CJK, kana,
     /// hangul, fullwidth forms, emoji) occupy ~1 em; word-script glyphs ~0.52 em
@@ -63,12 +108,31 @@ struct OverlayMetrics {
         return String(format: "%d:%02d", clamped / 60, clamped % 60)
     }
 
+    /// Capsules never look pill-shaped while tall, so the corner radius is
+    /// clamped to this value instead of following height all the way down.
+    static let maxCornerRadius: CGFloat = 28
+
+    /// Corner radius for a capsule of `height`: a true pill while short, and
+    /// clamped once the capsule grows tall enough for a full round to look
+    /// bloated. (Freezing the radius at the single-line value made multi-line
+    /// capsules read as plain rounded rectangles.)
+    static func cornerRadius(forHeight height: CGFloat) -> CGFloat {
+        min(max(height, 0) / 2, maxCornerRadius)
+    }
+
+    /// Session summary clock: always m:ss, unlike the live "9s" counter.
+    static func sessionDurationLabel(seconds: Int) -> String {
+        let clamped = max(seconds, 0)
+        return String(format: "%d:%02d", clamped / 60, clamped % 60)
+    }
+
     /// True when the character renders roughly one em wide (CJK / fullwidth /
     /// emoji), i.e. not a narrow latin glyph.
     static func isWide(_ character: Character) -> Bool {
         for scalar in character.unicodeScalars {
             switch scalar.value {
             case 0x1100...0x115F,    // hangul jamo
+                 0x2000...0x206F,    // general punctuation: the “…” in every status line renders full-width
                  0x2E80...0x303E,    // CJK radicals + symbols/punctuation
                  0x3041...0x33FF,    // kana, CJK compatibility
                  0x3400...0x4DBF,    // CJK ext A
@@ -87,6 +151,45 @@ struct OverlayMetrics {
             }
         }
         return false
+    }
+}
+
+/// Pure indeterminate ("busy") bar animation for the overlay: a soft bump
+/// sweeps out and back across the bars so a stage that is *not* listening to
+/// the microphone still reads as alive. Deterministic given `phase`
+/// (0...1, wraps), which makes it testable without a display refresh.
+struct IndeterminateWaveform {
+    let barCount: Int
+    /// Bar height when the bump is somewhere else — never fully flat, so the
+    /// capsule still looks alive between sweeps.
+    let resting: Float
+    let peak: Float
+    /// Travel distance covered by the bump, in bars.
+    let spread: Float
+
+    init(barCount: Int = 5, resting: Float = 0.16, peak: Float = 0.92, spread: Float = 1.6) {
+        self.barCount = barCount
+        self.resting = resting
+        self.peak = peak
+        self.spread = spread
+    }
+
+    /// One bar fraction (0...1) per bar for a bump sweeping at `phase`.
+    func bars(atPhase phase: Float) -> [Float] {
+        guard barCount > 0 else { return [] }
+        let progress = phase - phase.rounded(.down)
+        // Ping-pong instead of wrap-around: the two outermost bars are the ends
+        // of a linear chart, not neighbours, so wrapping would light them both
+        // at the same time and read as a glitch.
+        let travel = progress < 0.5 ? progress * 2 : (1 - progress) * 2
+        let span = Float(max(barCount - 1, 1))
+        let center = travel * span
+        return (0..<barCount).map { index in
+            let falloff = min(max(1 - abs(Float(index) - center) / spread, 0), 1)
+            // Smoothstep so the bump eases in and out instead of snapping.
+            let shaped = falloff * falloff * (3 - 2 * falloff)
+            return min(max(resting + (peak - resting) * shaped, 0), 1)
+        }
     }
 }
 

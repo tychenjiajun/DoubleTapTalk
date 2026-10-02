@@ -21,6 +21,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var appleSpeechBackend: AppleSpeechBackend?
     /// Continuous relay dictation session (nil when relay mode is off).
     private var relaySession: ContinuousDictationSession?
+    /// True from the moment the stop tap lands until the last segment is in —
+    /// decides whether the capsule closes with a session summary.
+    private var relayIsFinalizing = false
+    /// Segments that actually landed, mirrored into the menu bar header.
+    private var relaySegmentsInserted = 0
     /// Serializes segment insertions so rotated segments land in order even
     /// though their cloud-ASR work finishes at different times.
     private let relayChain = OrderedTaskChain()
@@ -70,6 +75,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         statusBarController?.onToggleLoginItem = { [weak self] in
             self?.toggleLoginItem()
+        }
+        // A relay session can run for minutes; the menu bar is the always-there
+        // place to confirm the mic is open and to end it without the hotkey.
+        statusBarController?.onStopRelay = { [weak self] in
+            self?.hotkeyService?.requestStop()
         }
         
         // Initialize hotkey service
@@ -124,6 +134,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task {
             let generation = beginDictation()
             resetSegmentHistory()
+            // A new dictation always starts clean: a relay session that was
+            // abandoned mid-finalize must not leave its summary armed for the
+            // next one-shot dictation.
+            relayIsFinalizing = false
+            relaySegmentsInserted = 0
 
             // Check and request microphone permission if needed
             let status = AVCaptureDevice.authorizationStatus(for: .audio)
@@ -169,7 +184,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } catch {
                 await MainActor.run {
                     logger.info("Failed to start recording: \(error)")
-                    recordingOverlay.dismiss()
+                    recordingOverlay.showError()
                     statusBarController?.updateState(.error)
                 }
             }
@@ -196,7 +211,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         
         let backend = AppleSpeechBackend()
         backend.onPartialText = { [weak self] text in
-            Task { @MainActor in self?.recordingOverlay.updateText(text) }
+            Task { @MainActor in self?.recordingOverlay.updateLiveText(text) }
         }
         backend.onAudioLevel = { [weak self] level in
             Task { @MainActor in self?.recordingOverlay.setAudioLevel(level) }
@@ -276,7 +291,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let session = ContinuousDictationSession(idleThreshold: DoubleTapTalkSettings.shared.relayIdleThreshold)
         session.onLiveText = { [weak self] text in
-            Task { @MainActor in self?.recordingOverlay.updateText(text) }
+            Task { @MainActor in self?.recordingOverlay.updateLiveText(text) }
         }
         session.onAudioLevel = { [weak self] level in
             Task { @MainActor in self?.recordingOverlay.setAudioLevel(level) }
@@ -298,8 +313,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         try session.start(language: DoubleTapTalkSettings.shared.language, inputMethodLanguage: inputMethodLang)
         relaySession = session
+        relayIsFinalizing = false
+        relaySegmentsInserted = 0
 
         await MainActor.run {
+            // Session HUD: persistent capsule + menu bar header for as long as
+            // the microphone stays open.
+            recordingOverlay.beginRelaySession(idleThreshold: session.idleThreshold)
+            statusBarController?.beginRelaySession()
             statusBarController?.updateState(.recording)
             logger.info("Relay dictation started")
         }
@@ -320,6 +341,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // inserted in order before the final segment is refined + injected.
         if let session = relaySession {
             relaySession = nil
+            relayIsFinalizing = true
+            statusBarController?.markRelayFinalizing()
             Task {
                 // stop() delivers all rotated segments (in order) before it
                 // returns, so enqueuing the final one here lands it last.
@@ -350,7 +373,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if let recordingURL = recordingURL {
                     await MainActor.run {
                         guard self.isCurrentGeneration(generation) else { return }
-                        self.recordingOverlay.updateText("云端识别中…")
+                        self.recordingOverlay.showTranscribing()
                     }
                     if let cloudText = await CloudTranscriptionService.shared.transcribe(fileURL: recordingURL, settings: asr) {
                         logger.info("Using cloud transcription (Apple result kept as fallback)")
@@ -362,7 +385,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     logger.warning("No recording file available — using Apple result")
                     await MainActor.run {
                         guard self.isCurrentGeneration(generation) else { return }
-                        self.recordingOverlay.updateText("Polishing…")
+                        self.recordingOverlay.showPolishing()
                     }
                 }
             } else {
@@ -371,7 +394,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 await MainActor.run {
                     guard self.isCurrentGeneration(generation) else { return }
-                    self.recordingOverlay.updateText("Polishing…")
+                    self.recordingOverlay.showPolishing()
                 }
             }
 
@@ -477,13 +500,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// quietly — never touches the overlay or the live segment. Segments with
     /// no words recognized by Apple are skipped (no blank audio to ASR).
     private func insertRelaySegment(_ result: ContinuousDictationSession.SegmentTranscript, generation: Int) async {
+        await MainActor.run { self.recordingOverlay.noteSegmentStarted() }
         guard !result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             logger.info("Relay segment: no words recognized by Apple — skipping")
+            await MainActor.run { self.recordingOverlay.noteSegmentSkipped() }
             return
         }
         var text = result.text
         let asr = ASRSettings.current()
         if asr.enabled, let url = result.recordingFileURL {
+            await MainActor.run { self.recordingOverlay.showTranscribing() }
             if let cloudText = await CloudTranscriptionService.shared.transcribe(fileURL: url, settings: asr) {
                 text = cloudText
                 logger.info("Relay segment: cloud transcription used")
@@ -495,6 +521,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Refinement runs when the LLM is enabled+configured — automatically,
         // no tap distinction needed.
         if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            await MainActor.run { self.recordingOverlay.showPolishing() }
             text = await PolishProcessor().process(
                 rawText: text,
                 settings: LLMSettings.current(),
@@ -502,7 +529,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
         }
 
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            // Recognized but never inserted: the session HUD must say so, or the
+            // user assumes their words are in the document.
+            logger.info("Relay segment: nothing left to insert — reporting as failed")
+            await MainActor.run { self.recordingOverlay.noteSegmentFailed() }
+            return
+        }
         guard isCurrentGeneration(generation) else {
             logger.info("Relay segment finished after session \(generation) ended — dropping")
             return
@@ -510,8 +543,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appendSegmentHistory(text)
         logger.info("Relay segment injecting: \(text)")
         let toInject = text
+        let characterCount = text.count
         await MainActor.run {
             guard self.isCurrentGeneration(generation) else { return }
+            // Receipt: the user hears the pop, and now sees which segment landed.
+            self.relaySegmentsInserted += 1
+            self.recordingOverlay.noteSegmentInserted(characters: characterCount)
+            self.statusBarController?.updateRelayProgress(segments: self.relaySegmentsInserted)
             self.inject(toInject)
         }
     }
@@ -520,6 +558,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// reveal → inject → dismiss flow, with earlier segments as context. No
     /// upload when Apple recognized no words.
     private func finishRelay(finalResult: ContinuousDictationSession.SegmentTranscript, generation: Int) async {
+        await MainActor.run { self.recordingOverlay.noteSegmentStarted() }
         var rawText = finalResult.text
         let asr = ASRSettings.current()
         let hasWords = !rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -527,7 +566,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if asr.enabled, hasWords, let url = finalResult.recordingFileURL {
             await MainActor.run {
                 guard self.isCurrentGeneration(generation) else { return }
-                self.recordingOverlay.updateText("云端识别中…")
+                self.recordingOverlay.showTranscribing()
             }
             if let cloudText = await CloudTranscriptionService.shared.transcribe(fileURL: url, settings: asr) {
                 rawText = cloudText
@@ -540,7 +579,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             await MainActor.run {
                 guard self.isCurrentGeneration(generation) else { return }
-                self.recordingOverlay.updateText("Polishing…")
+                self.recordingOverlay.showPolishing()
             }
         }
         await finalize(rawText: rawText, previousSegments: segmentHistorySnapshot(), generation: generation)
@@ -561,17 +600,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             previousSegments: previousSegments
         )
         
-        // "✨ what changed" moment (borrowed from voice-input-dist): when the
-        // polish pass actually changed the text, hold the result in the overlay
-        // for a beat so the user sees the edit before it lands.
+        // "what changed" moment: when the polish pass actually changed the text,
+        // hold the result in the overlay for a beat so the user sees the edit
+        // before it lands. The capsule's success styling carries the ✨ now.
         let wasChanged = !text.isEmpty && text != rawText
         
         await MainActor.run {
             guard self.isCurrentGeneration(generation) else { return }
             if text.isEmpty {
-                self.recordingOverlay.updateText("未识别到语音")
+                self.recordingOverlay.showEmpty()
             } else if wasChanged {
-                self.recordingOverlay.updateText("✨ \(text)")
+                self.recordingOverlay.showResult(text)
             }
         }
         
@@ -590,7 +629,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 logger.info("Empty or nil text result")
             }
-            self.recordingOverlay.dismiss()
+            if self.relayIsFinalizing {
+                if !text.isEmpty {
+                    self.relaySegmentsInserted += 1
+                    self.recordingOverlay.noteFinalSegmentInserted(characters: text.count)
+                }
+                // A relay session closes with a receipt: how much landed, how
+                // long it took, what never made it in. Without it, stopping a
+                // long session looks exactly like a one-shot dictation.
+                self.recordingOverlay.endRelaySession()
+                self.statusBarController?.endRelaySession()
+                self.relayIsFinalizing = false
+                self.relaySegmentsInserted = 0
+            } else {
+                self.recordingOverlay.dismiss()
+            }
             self.statusBarController?.updateState(.idle)
         }
         

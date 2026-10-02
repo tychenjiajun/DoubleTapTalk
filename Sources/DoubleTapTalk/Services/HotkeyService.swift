@@ -64,6 +64,23 @@ final class HotkeyService {
         }
     }
     
+    /// Menu-driven stop ("End Continuous Dictation"). Mirrors a Control tap
+    /// release exactly, including the internal flag and the pending
+    /// double-tap window, so the next tap is read as a fresh start instead of a
+    /// second stop.
+    func requestStop() {
+        guard isRecording else {
+            logger.debug("Stop requested but no session is running — ignored")
+            return
+        }
+        isRecording = false
+        lastTapTime = nil
+        logger.info("Stop requested from the menu")
+        DispatchQueue.main.async { [weak self] in
+            self?.onHotkeyReleased?()
+        }
+    }
+
     func stop() {
         logger.info("Stopping hotkey service...")
         // Stop health check

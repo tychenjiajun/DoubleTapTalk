@@ -46,8 +46,9 @@ DoubleTapTalk transforms how you interact with your Mac. Instead of typing, **sp
 - **Zero Setup**: No API keys, no accounts, no configuration
 - **Menu Bar Design**: Runs quietly without Dock icon clutter
 - **⚡ Streaming Live Text** (Apple backend): watch your words appear live as you speak
-- **🎛️ Recording Overlay**: frameless capsule with real-time waveform, a live recording-seconds counter, and live transcription. It widens as you speak and, for long sentences, wraps to up to 4 lines (the capsule grows taller) instead of truncating.
+- **🎛️ Recording Overlay**: frameless capsule with real-time waveform, a live recording-seconds counter, and live transcription. It widens as you speak and, for long sentences, wraps to up to 4 lines (the capsule grows taller) instead of truncating. Every pipeline stage has its own look — live bars while you speak, a travelling bump while it uploads or polishes, and a check / mic-slash / warning symbol with a matching accent border for the result, "no speech", and failure cases.
 - **🔁 Continuous Dictation (Relay, opt-in)**: with the toggle enabled in Settings, the mic stays open the whole time — after a pause (default 3 s, configurable) the current segment is recognized + inserted and a new one starts, so you can dictate long passages with thinking breaks. Segments with no words recognized by Apple are skipped entirely — blank audio is never kept or uploaded to cloud ASR.
+- **🧾 Segment Receipts (Relay)**: while a relay session runs, the capsule becomes a fixed-height status HUD (placement unchanged): one dimmed line of in-progress words plus a column showing the segment counter, elapsed time, and what just happened — `识别中…`, `✓ 已插入 · 24 字`, `无语音，已跳过`, and a persistent `⚠︎ N 段未插入` chip if a recognized segment never made it into the document. After ~8 s of silence it collapses to a slim pill and expands again the moment you speak. Ending the session shows a receipt (`✓ 7 段 · 312 字 · 1:42`), and the menu bar carries a live `连续听写中 · 第 3 段 · 1:42` header with an **End Continuous Dictation** item.
 - **🌩️ Cloud Transcription (optional)**: when enabled, the recording is saved as a WAV file and sent to an OpenAI-compatible ASR endpoint (e.g. Aliyun DashScope `qwen3-asr-flash`); any failure falls back to Apple's on-device result. With the feature off, no audio is ever written to disk.
 
 #### 🛡️ On-Device Recognition (Apple)
@@ -89,7 +90,7 @@ Input:  "I'm looking for recent build failures in logs"
 Output: I'm looking for recent build failures in logs ✓ (preserved intent)
 ```
 
-**✨ What-Changed Preview**: When the AI modifies your text, the overlay previews `✨ polished result` for a second before injecting — you always see what changed.
+**✨ What-Changed Preview**: When the AI modifies your text, the overlay shows the polished result behind a green ✓ for a second before injecting — you always see what changed.
 
 **🧠 Segment Context (relay)**: during continuous dictation each segment's refinement prompt includes the **previous segments' ASR/refinement results** (last 8, 120 chars each) so terminology and style stay consistent and prior content is not repeated.
 
