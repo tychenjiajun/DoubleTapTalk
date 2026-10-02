@@ -5,12 +5,27 @@ import AVFoundation
 private let logger = FileLogger.shared
 
 /// Tracks "no new words" idle silence for one dictation segment (pure, testable).
-/// The idle deadline resets ONLY when the recognizer's best text actually
-/// changes — repeated identical partial updates (which SFSpeechRecognizer emits
-/// constantly while streaming) never extend the segment.
+///
+/// The idle deadline is driven by TWO signals, OR'd together:
+/// 1. **Waveform voice activity** (the tap's RMS level, updated every ~64ms) —
+///    this is the primary clock. Recognition text arrives late (SFSpeechRecognizer
+///    needs time to commit what it heard), so text-only idle detection turned a
+///    configured 2s pause into "2s + recognition latency". Audio-based detection
+///    makes a 2s pause a real 2s of silence.
+/// 2. **Recognition text changes** — the fallback: softly spoken words that sit
+///    just under the RMS threshold still reset the deadline.
+///
+/// Repeated identical partial updates (which SFSpeechRecognizer emits constantly
+/// while streaming) never extend the segment — only genuinely new text does.
 struct RelaySegmentActivity {
-    private var lastChange = Date()
+    /// Tap RMS above this counts as the user speaking. Matches the overlay's own
+    /// voice-activity gate (`setAudioLevel`). Real speech usually sits at
+    /// 0.05–0.4; silence is well below 0.01.
+    static let voiceActivityThreshold: Float = 0.02
+
+    private var lastEvidence = Date()
     private var _hasHeardText = false
+    private var _hasVoiceActivity = false
     private var lastObservedText = ""
 
     /// Call with the recognizer's current best text. Returns true when the text
@@ -18,17 +33,32 @@ struct RelaySegmentActivity {
     mutating func observe(text: String) -> Bool {
         guard text != lastObservedText else { return false }
         lastObservedText = text
-        lastChange = Date()
+        lastEvidence = Date()
         _hasHeardText = true
         return true
     }
 
+    /// Waveform evidence of speech: the tap's RMS level. Resets the idle
+    /// deadline on arrival — before the recognizer has even committed the word
+    /// — so rotation measures real silence, not silence plus recognition delay.
+    mutating func observeAudio(level: Float) {
+        guard level > Self.voiceActivityThreshold else { return }
+        lastEvidence = Date()
+        _hasVoiceActivity = true
+    }
+
     var hasHeardText: Bool { _hasHeardText }
 
-    /// True when enough silence has passed since the last new word.
+    /// Any evidence the user has spoken at all — text or waveform. A segment
+    /// that never heard either stays open (no garbage segments from a silent
+    /// session), matching the old `hasHeardText` gate while also covering
+    /// speech Apple failed to transcribe.
+    var hasEvidence: Bool { _hasHeardText || _hasVoiceActivity }
+
+    /// True when enough silence has passed since the last evidence.
     func shouldRotate(now: Date, threshold: TimeInterval) -> Bool {
-        guard _hasHeardText else { return false }
-        return now.timeIntervalSince(lastChange) >= threshold
+        guard hasEvidence else { return false }
+        return now.timeIntervalSince(lastEvidence) >= threshold
     }
 }
 
@@ -186,10 +216,14 @@ final class ContinuousDictationSession {
             _ = activity.observe(text: text)
         }
 
-        /// Feeds the tap's RMS level into the segment's peak tracker (called
-        /// on the audio tap thread, read at finalize — guarded by activityLock).
+        /// Feeds the tap's RMS level into the segment: starts/stays "alive" via
+        /// voice activity and tracks the peak (called on the audio tap thread,
+        /// read at finalize — guarded by activityLock). Text-only idle detection
+        /// absorbed recognition latency into the rotation delay; waveform
+        /// activity keeps the clock honest.
         func noteAudio(level: Float) {
             activityLock.lock(); defer { activityLock.unlock() }
+            activity.observeAudio(level: level)
             audioPeak = max(audioPeak, level)
         }
 

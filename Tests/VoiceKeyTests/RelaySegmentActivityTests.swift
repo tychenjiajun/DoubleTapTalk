@@ -68,6 +68,71 @@ final class RelaySegmentActivityTests: XCTestCase {
         XCTAssertTrue(activity.observe(text: "ab"))
         XCTAssertFalse(activity.observe(text: "ab"))
     }
+
+    // MARK: - Waveform-driven idle detection
+
+    /// The reason waveform detection exists: recognition text arrives late, so
+    /// a text-only deadline turns a configured pause into pause + recognizer
+    /// latency. Voice activity must be able to keep a segment alive on its own.
+    func testVoiceActivityAloneKeepsSegmentAlive() {
+        var activity = RelaySegmentActivity()
+        // Speaker's RMS while talking (typical speech sits at 0.05–0.4).
+        activity.observeAudio(level: 0.25)
+        XCTAssertFalse(activity.hasHeardText, "audio alone must not claim text")
+        XCTAssertTrue(activity.hasEvidence)
+        // 2s after the last waveform evidence: no rotation (threshold 3s).
+        XCTAssertFalse(activity.shouldRotate(now: Date().addingTimeInterval(2.0), threshold: 3))
+        // 3.5s of real silence: rotation due.
+        XCTAssertTrue(activity.shouldRotate(now: Date().addingTimeInterval(3.5), threshold: 3))
+    }
+
+    func testQuietLevelsNeverCountAsVoice() {
+        var activity = RelaySegmentActivity()
+        activity.observeAudio(level: 0.005)
+        activity.observeAudio(level: 0.019)   // just under the 0.02 gate
+        activity.observeAudio(level: 0.0)
+        XCTAssertFalse(activity.hasEvidence)
+        XCTAssertFalse(activity.shouldRotate(now: Date().addingTimeInterval(60), threshold: 3),
+                       "quiet/silent audio must not produce evidence or a deadline")
+    }
+
+    func testVoiceActivityResetsIdleDeadlineMidSegment() {
+        var activity = RelaySegmentActivity()
+        activity.observeAudio(level: 0.3)          // t0: user speaking
+        activity.observeAudio(level: 0.2)          // shortly after: resumed speech
+        // The deadline anchors to the LATEST evidence, not the session start.
+        XCTAssertFalse(activity.shouldRotate(now: Date().addingTimeInterval(2.0), threshold: 3))
+        XCTAssertTrue(activity.shouldRotate(now: Date().addingTimeInterval(3.5), threshold: 3))
+    }
+
+    func testTextAndWaveformShareOneDeadline() {
+        var activity = RelaySegmentActivity()
+        _ = activity.observe(text: "hello")        // t0: text evidence
+        activity.observeAudio(level: 0.15)          // t1: waveform evidence
+        XCTAssertFalse(activity.shouldRotate(now: Date().addingTimeInterval(2.0), threshold: 3))
+        XCTAssertTrue(activity.shouldRotate(now: Date().addingTimeInterval(3.5), threshold: 3))
+    }
+
+    func testIdenticalTextRepeatsDoNotHideSilenceButAudioDoes() {
+        var activity = RelaySegmentActivity()
+        _ = activity.observe(text: "hello")         // t0
+        // The recognizer re-emits "hello" every ~300ms while streaming; these
+        // must NOT reset the deadline (they carry no new information)…
+        XCTAssertFalse(activity.observe(text: "hello"))
+        XCTAssertTrue(activity.shouldRotate(now: Date().addingTimeInterval(3.5), threshold: 3))
+        // …but a waveform burst during that window IS new evidence: the
+        // deadline re-anchors to it.
+        activity.observeAudio(level: 0.1)
+        XCTAssertFalse(activity.shouldRotate(now: Date().addingTimeInterval(2.0), threshold: 3))
+        XCTAssertTrue(activity.shouldRotate(now: Date().addingTimeInterval(3.5), threshold: 3))
+    }
+
+    func testVoiceWithoutTextStillRotatesIntoASkippableSegment() {
+        var activity = RelaySegmentActivity()
+        activity.observeAudio(level: 0.2)           // user spoke, Apple heard nothing
+        XCTAssertTrue(activity.shouldRotate(now: Date().addingTimeInterval(3.5), threshold: 3),
+                       "untranscribed speech must still close so the caller can skip it")
+    }
 }
 
 /// The rotation finalize gate: when a segment rotates, Apple answers our own
