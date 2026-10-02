@@ -168,4 +168,57 @@ final class RecordingFileWriterTests: XCTestCase {
         XCTAssertEqual(remaining.count, 2)
         XCTAssertFalse(remaining.contains("Recording_20250101_000000.wav"), "oldest recording must be pruned")
     }
+
+    // MARK: - Settings-panel storage management (RecordingStore)
+
+    func testStoreStatsCountsWavFilesAndBytes() throws {
+        try Data(count: 1_000).write(to: tempDir.appendingPathComponent("Recording_a.wav"))
+        try Data(count: 500).write(to: tempDir.appendingPathComponent("Recording_b.wav"))
+        try Data(count: 42).write(to: tempDir.appendingPathComponent("notes.txt"))  // ignored
+
+        let stats = RecordingStore.stats(in: tempDir)
+        XCTAssertEqual(stats.fileCount, 2)
+        XCTAssertEqual(stats.totalBytes, 1_500)
+        XCTAssertFalse(stats.formattedSize.isEmpty)
+    }
+
+    func testStoreStatsOnMissingDirectoryIsEmpty() {
+        let missing = tempDir.appendingPathComponent("does-not-exist", isDirectory: true)
+        XCTAssertEqual(RecordingStore.stats(in: missing), .empty)
+    }
+
+    func testStoreDeleteAllRemovesOnlyRecordings() throws {
+        try Data(count: 10).write(to: tempDir.appendingPathComponent("Recording_a.wav"))
+        try Data(count: 10).write(to: tempDir.appendingPathComponent("Recording_b.wav"))
+        try Data(count: 10).write(to: tempDir.appendingPathComponent("keep.txt"))
+
+        let removed = RecordingStore.deleteAll(in: tempDir)
+        XCTAssertEqual(removed, 2)
+        XCTAssertEqual(RecordingStore.stats(in: tempDir), .empty)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: tempDir.appendingPathComponent("keep.txt").path))
+    }
+
+    func testStoreDeleteAllOnMissingDirectoryIsNoop() {
+        let missing = tempDir.appendingPathComponent("nope", isDirectory: true)
+        XCTAssertEqual(RecordingStore.deleteAll(in: missing), 0)
+    }
+
+    func testStoreFormattedSizeIsHumanReadable() {
+        XCTAssertTrue(RecordingStoreStats(fileCount: 0, totalBytes: 0).formattedSize.contains("KB"))
+        XCTAssertTrue(RecordingStoreStats(fileCount: 1, totalBytes: 5_000_000).formattedSize.contains("MB"))
+    }
+
+    func testWritesAreFlushedBeforeFinish() throws {
+        // Appends are async; finish() must still see every byte.
+        guard let writer = RecordingFileWriter(directory: tempDir) else {
+            return XCTFail("writer init failed")
+        }
+        try writer.open()
+        for _ in 0..<20 {
+            writer.append(makeFloatBuffer(frames: 50, sampleFunc: { _ in 0.5 }))
+        }
+        guard let url = writer.finish() else { return XCTFail("finish returned nil") }
+        let data = try Data(contentsOf: url)
+        XCTAssertEqual(data.count, 44 + 20 * 50 * 2, "all queued appends must be flushed by finish()")
+    }
 }

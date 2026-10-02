@@ -35,12 +35,13 @@ final class MicrophonePermissionService {
             
         case .notDetermined:
             logger.info("Requesting microphone permission...")
+            let logger = self.logger
             return await withCheckedContinuation { continuation in
                 AVCaptureDevice.requestAccess(for: .audio) { granted in
                     if granted {
-                        self.logger.info("Microphone permission granted")
+                        logger.info("Microphone permission granted")
                     } else {
-                        self.logger.warning("Microphone permission denied")
+                        logger.warning("Microphone permission denied")
                     }
                     continuation.resume(returning: granted)
                 }
@@ -87,8 +88,8 @@ final class MicrophonePermissionService {
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
-        var name: CFString = "" as CFString
-        var nameSize = UInt32(MemoryLayout<CFString>.size)
+        var name: Unmanaged<CFString>?
+        var nameSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
         
         let nameStatus = AudioObjectGetPropertyData(
             deviceID,
@@ -99,7 +100,8 @@ final class MicrophonePermissionService {
             &name
         )
         
-        return nameStatus == noErr ? name as String : nil
+        guard nameStatus == noErr, let name else { return nil }
+        return name.takeRetainedValue() as String
     }
     
     /// Get human-readable description of current permission status

@@ -26,6 +26,7 @@ let package = Package(
                 "Services/HotkeyService.swift",
                 "Services/LLMService.swift",
                 "Services/MicrophonePermissionService.swift",
+                "Services/OrderedTaskChain.swift",
                 "Services/PolishProcessor.swift",
                 "Services/RecordingFileWriter.swift",
                 "Services/TextInjectionService.swift",

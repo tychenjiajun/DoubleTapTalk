@@ -110,6 +110,10 @@ final class CloudTranscriptionService {
     /// `asr_options` is a DashScope extension — only attached for ASR models so
     /// a plain OpenAI-compatible chat endpoint isn't sent unknown params.
     /// Throws (instead of returning an empty body) so the caller falls back.
+    ///
+    /// Note: this targets DashScope's compatible-mode `input_audio` schema
+    /// (base64 data URL, no `format` field). OpenAI's own audio endpoints also
+    /// expect a `format` key and are not supported as-is.
     static func buildRequestBody(model: String, dataURL: String, language: String? = nil, includeASROptions: Bool? = nil) throws -> Data {
         let content: [String: Any] = [
             "type": "input_audio",

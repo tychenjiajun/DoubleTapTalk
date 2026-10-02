@@ -24,6 +24,7 @@
 		A5C32F17E0CDD9DEFE190A71 /* PipelineError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53D79246657B8C6808F0CEC4 /* PipelineError.swift */; };
 		AA9177B7B27D2A9C12A91A04 /* LLMProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 580517CA1DE77BD9581EAACB /* LLMProvider.swift */; };
 		AB82F2F5C9E4A77A69C04A15 /* TextInjectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B1288EFBEDCE17AE394B1BB /* TextInjectionService.swift */; };
+		B9D9B8662A36DF68876516AB /* OrderedTaskChain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4257C1C6DA696CAB593F9588 /* OrderedTaskChain.swift */; };
 		CB70F4C9CAFF36529C7E6487 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 417D43B5AB8DD1C9E38F1E91 /* Settings.swift */; };
 		CE53A33A2E79BB0E4FE34630 /* CloudTranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C39F972B02531CE2DA58401 /* CloudTranscriptionService.swift */; };
 		E88C95A0C23F5D6F2E0E2D50 /* PolishModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8201174E2DBE014AE074582 /* PolishModels.swift */; };
@@ -40,6 +41,7 @@
 		2DDBB70D68CC1A7D870D3115 /* HotkeyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyService.swift; sourceTree = "<group>"; };
 		3D15A7716E4C4A101E43F839 /* WaveformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveformView.swift; sourceTree = "<group>"; };
 		417D43B5AB8DD1C9E38F1E91 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
+		4257C1C6DA696CAB593F9588 /* OrderedTaskChain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrderedTaskChain.swift; sourceTree = "<group>"; };
 		53D79246657B8C6808F0CEC4 /* PipelineError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PipelineError.swift; sourceTree = "<group>"; };
 		580517CA1DE77BD9581EAACB /* LLMProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMProvider.swift; sourceTree = "<group>"; };
 		5B1288EFBEDCE17AE394B1BB /* TextInjectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextInjectionService.swift; sourceTree = "<group>"; };
@@ -125,6 +127,7 @@
 				2DDBB70D68CC1A7D870D3115 /* HotkeyService.swift */,
 				CCF904CA137C20A1DEA9B59A /* LLMService.swift */,
 				1A8F33F795AE6DF93EA56FF9 /* MicrophonePermissionService.swift */,
+				4257C1C6DA696CAB593F9588 /* OrderedTaskChain.swift */,
 				A41F0C0AB39501E3C01C0282 /* PolishProcessor.swift */,
 				11BBD14466F5C91817D48534 /* RecordingFileWriter.swift */,
 				5B1288EFBEDCE17AE394B1BB /* TextInjectionService.swift */,
@@ -220,6 +223,7 @@
 				AA9177B7B27D2A9C12A91A04 /* LLMProvider.swift in Sources */,
 				8FFA2661B9D3B4B7DF466688 /* LLMService.swift in Sources */,
 				934F1F464337AD7BA187B16B /* MicrophonePermissionService.swift in Sources */,
+				B9D9B8662A36DF68876516AB /* OrderedTaskChain.swift in Sources */,
 				6EF7C6837B2AE12C791EB6ED /* OverlayMetrics.swift in Sources */,
 				A5C32F17E0CDD9DEFE190A71 /* PipelineError.swift in Sources */,
 				E88C95A0C23F5D6F2E0E2D50 /* PolishModels.swift in Sources */,

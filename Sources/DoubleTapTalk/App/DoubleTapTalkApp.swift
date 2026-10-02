@@ -23,11 +23,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var relaySession: ContinuousDictationSession?
     /// Serializes segment insertions so rotated segments land in order even
     /// though their cloud-ASR work finishes at different times.
-    private var relayChain: Task<Void, Never>?
-    /// Guards `relayChain` + `segmentHistory`: enqueues arrive from the
-    /// session's emission chain and from stopRecording's task on different
-    /// executors (NSLock — both critical sections are non-blocking).
+    private let relayChain = OrderedTaskChain()
+    /// Guards `dictationGeneration`, `activeGeneration` + `segmentHistory`:
+    /// enqueues arrive from the session's emission chain and from
+    /// stopRecording's task on different executors (NSLock — critical sections
+    /// are non-blocking).
     private let relayLock = NSLock()
+    /// Monotonic per-dictation id. Every result carries the id of the session
+    /// that produced it, and stale results are dropped instead of being
+    /// injected into whatever the user is doing now.
+    private var dictationGeneration = 0
+    /// Generation of the dictation currently being recorded (what `stop`
+    /// finalizes).
+    private var activeGeneration = 0
     /// Inserted results of earlier segments in the current dictation session,
     /// fed into each refinement prompt for consistency (capped inside the prompt).
     private var segmentHistory: [String] = []
@@ -114,6 +122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func startRecording() {
         Task {
+            let generation = beginDictation()
             resetSegmentHistory()
 
             // Check and request microphone permission if needed
@@ -153,7 +162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Continuous (relay) mode keeps the mic open across segments when enabled.
             do {
                 if DoubleTapTalkSettings.shared.relayEnabled {
-                    try await startRelayStreaming()
+                    try await startRelayStreaming(generation: generation)
                 } else {
                     try await startAppleStreaming()
                 }
@@ -249,7 +258,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Continuous dictation: one persistent engine + tap, segments rotated on
     /// idle silence, every rotated segment transcribed via cloud ASR (with
     /// Apple fallback) and inserted without disturbing the live overlay.
-    private func startRelayStreaming() async throws {
+    private func startRelayStreaming(generation: Int) async throws {
         logger.info("Starting continuous relay dictation...")
 
         guard await AppleSpeechBackend.requestPermission() else {
@@ -278,7 +287,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         session.onSegmentTranscript = { [weak self] result in
             // Synchronous on purpose: the session's emission chain (and stop())
             // awaits this callback, so ordering is preserved end-to-end.
-            self?.enqueueRelaySegment(result, final: false)
+            self?.enqueueRelaySegment(result, final: false, generation: generation)
         }
 
         // Resolve on the main thread (TIS requires it).
@@ -299,7 +308,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func stopRecording() {
         statusBarController?.updateState(.processing)
         logger.info("Recording stopped")
-        
+
+        // Captured now: any result produced from here on is only allowed to be
+        // injected while this is still the newest dictation.
+        let generation = generationSnapshot()
+
         // Relay mode: finalize the whole session; already-rotated segments are
         // inserted in order before the final segment is refined + injected.
         if let session = relaySession {
@@ -308,7 +321,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // stop() delivers all rotated segments (in order) before it
                 // returns, so enqueuing the final one here lands it last.
                 let result = await session.stop()
-                self.enqueueRelaySegment(result, final: true)
+                self.enqueueRelaySegment(result, final: true, generation: generation)
             }
             return
         }
@@ -324,8 +337,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let recordingURL = backend.recordingFileURL
 
             // Cloud transcription (OpenAI-compatible ASR) of the recorded audio
-            // replaces the final text; Apple's on-device result is the fallback.
-            // Skip upload when Apple recognized no words — no blank audio to ASR.
+            // replaces the final text; Apple's result is the fallback. Skip
+            // upload when Apple recognized no words — no blank audio to ASR.
             let asr = ASRSettings.current()
             var rawText = appleText
             let hasWords = !appleText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -333,18 +346,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if asr.enabled, hasWords {
                 if let recordingURL = recordingURL {
                     await MainActor.run {
-                        recordingOverlay.updateText("云端识别中…")
+                        guard self.isCurrentGeneration(generation) else { return }
+                        self.recordingOverlay.updateText("云端识别中…")
                     }
                     if let cloudText = await CloudTranscriptionService.shared.transcribe(fileURL: recordingURL, settings: asr) {
                         logger.info("Using cloud transcription (Apple result kept as fallback)")
                         rawText = cloudText
                     } else {
-                        logger.info("Cloud transcription unavailable — falling back to Apple on-device result")
+                        logger.info("Cloud transcription unavailable — falling back to Apple result")
                     }
                 } else {
                     logger.warning("No recording file available — using Apple result")
                     await MainActor.run {
-                        recordingOverlay.updateText("Polishing…")
+                        guard self.isCurrentGeneration(generation) else { return }
+                        self.recordingOverlay.updateText("Polishing…")
                     }
                 }
             } else {
@@ -352,12 +367,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     logger.info("No words recognized by Apple — skipping cloud upload")
                 }
                 await MainActor.run {
-                    recordingOverlay.updateText("Polishing…")
+                    guard self.isCurrentGeneration(generation) else { return }
+                    self.recordingOverlay.updateText("Polishing…")
                 }
             }
 
-            await finalize(rawText: rawText)
+            await finalize(rawText: rawText, generation: generation)
         }
+    }
+
+    // MARK: - Dictation generations
+
+    /// Starts a new dictation session and returns its generation id.
+    @discardableResult
+    private func beginDictation() -> Int {
+        relayLock.lock()
+        defer { relayLock.unlock() }
+        dictationGeneration += 1
+        activeGeneration = dictationGeneration
+        return dictationGeneration
+    }
+
+    /// Generation of the dictation currently being recorded. `stopRecording`
+    /// captures this *before* its async work starts so a later session can't
+    /// rewrite what the result belongs to.
+    private func generationSnapshot() -> Int {
+        relayLock.lock()
+        defer { relayLock.unlock() }
+        return activeGeneration
+    }
+
+    /// True while `generation` is still the newest dictation. Cloud ASR (which
+    /// can take tens of seconds) and refinement can outlive a session; their
+    /// results must never be injected into a later one.
+    private func isCurrentGeneration(_ generation: Int) -> Bool {
+        relayLock.lock()
+        defer { relayLock.unlock() }
+        return generation == dictationGeneration
     }
 
     // MARK: - Relay segment output
@@ -366,34 +412,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// cloud-transcribed + refined + inserted in order, and the final segment
     /// (flagged `final`) runs last, reusing the classic finalize() reveal flow.
     ///
-    /// All relay state (`relayChain`, `segmentHistory`) is guarded by
-    /// `relayLock`: enqueues arrive from the session's emission chain (awaited
-    /// in order) and from stopRecording's task, on different executors.
-    private func enqueueRelaySegment(_ result: ContinuousDictationSession.SegmentTranscript, final: Bool) {
-        relayLock.lock()
-        let previous = relayChain
-        relayChain = Task { [weak self] in
-            _ = await previous?.value
+    /// Stale work (a session that has since ended) is dropped here, before it
+    /// can touch the overlay, the history or the user's cursor.
+    private func enqueueRelaySegment(_ result: ContinuousDictationSession.SegmentTranscript, final: Bool, generation: Int) {
+        relayChain.enqueue { [weak self] in
             guard let self else { return }
+            guard self.isCurrentGeneration(generation) else {
+                self.logger.info("Dropping stale relay segment from session \(generation)")
+                return
+            }
             if final {
-                await self.finishRelay(finalResult: result)
+                await self.finishRelay(finalResult: result, generation: generation)
             } else {
-                await self.insertRelaySegment(result)
+                await self.insertRelaySegment(result, generation: generation)
             }
         }
-        relayLock.unlock()
     }
 
     /// Fresh history for a new dictation session, ordered behind any
     /// still-processing segments of the previous one (a lingering chain must
-    /// never append into the new session's history).
+    /// never append into the new session's history). The reset itself takes
+    /// `relayLock`, like every other `segmentHistory` access.
     private func resetSegmentHistory() {
-        relayLock.lock()
-        let previous = relayChain
-        relayChain = Task { [weak self] in
-            _ = await previous?.value
-            self?.segmentHistory = []
+        relayChain.enqueue { [weak self] in
+            self?.clearSegmentHistory()
         }
+    }
+
+    /// Sync helper so the lock is taken outside the async closure (NSLock is
+    /// unavailable from async contexts) — same pattern as the session's
+    /// `claimForStop`.
+    private func clearSegmentHistory() {
+        relayLock.lock()
+        segmentHistory = []
         relayLock.unlock()
     }
 
@@ -422,7 +473,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// refinement (when enabled) using earlier segments as context, then inject
     /// quietly — never touches the overlay or the live segment. Segments with
     /// no words recognized by Apple are skipped (no blank audio to ASR).
-    private func insertRelaySegment(_ result: ContinuousDictationSession.SegmentTranscript) async {
+    private func insertRelaySegment(_ result: ContinuousDictationSession.SegmentTranscript, generation: Int) async {
         guard !result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             logger.info("Relay segment: no words recognized by Apple — skipping")
             return
@@ -449,10 +500,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard isCurrentGeneration(generation) else {
+            logger.info("Relay segment finished after session \(generation) ended — dropping")
+            return
+        }
         appendSegmentHistory(text)
         logger.info("Relay segment injecting: \(text)")
         let toInject = text
         await MainActor.run {
+            guard self.isCurrentGeneration(generation) else { return }
             self.inject(toInject)
         }
     }
@@ -460,14 +516,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Final segment: cloud ASR (fallback Apple) then the classic refine →
     /// reveal → inject → dismiss flow, with earlier segments as context. No
     /// upload when Apple recognized no words.
-    private func finishRelay(finalResult: ContinuousDictationSession.SegmentTranscript) async {
+    private func finishRelay(finalResult: ContinuousDictationSession.SegmentTranscript, generation: Int) async {
         var rawText = finalResult.text
         let asr = ASRSettings.current()
         let hasWords = !rawText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
         if asr.enabled, hasWords, let url = finalResult.recordingFileURL {
             await MainActor.run {
-                recordingOverlay.updateText("云端识别中…")
+                guard self.isCurrentGeneration(generation) else { return }
+                self.recordingOverlay.updateText("云端识别中…")
             }
             if let cloudText = await CloudTranscriptionService.shared.transcribe(fileURL: url, settings: asr) {
                 rawText = cloudText
@@ -479,15 +536,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 logger.info("Relay final: no words recognized by Apple — skipping cloud upload")
             }
             await MainActor.run {
-                recordingOverlay.updateText("Polishing…")
+                guard self.isCurrentGeneration(generation) else { return }
+                self.recordingOverlay.updateText("Polishing…")
             }
         }
-        await finalize(rawText: rawText, previousSegments: segmentHistorySnapshot())
+        await finalize(rawText: rawText, previousSegments: segmentHistorySnapshot(), generation: generation)
     }
 
     /// Shared tail (DRY): refine (when enabled) → ✨ reveal (when changed) →
-    /// inject → dismiss overlay.
-    private func finalize(rawText: String, previousSegments: [String] = []) async {
+    /// inject → dismiss overlay. Every step is generation-guarded: a stale
+    /// result must neither overwrite the overlay nor inject into the cursor.
+    private func finalize(rawText: String, previousSegments: [String] = [], generation: Int) async {
+        guard isCurrentGeneration(generation) else {
+            logger.info("Dictation \(generation) is stale — dropping result instead of injecting")
+            return
+        }
+
         let text = await PolishProcessor().process(
             rawText: rawText,
             settings: LLMSettings.current(),
@@ -500,10 +564,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let wasChanged = !text.isEmpty && text != rawText
         
         await MainActor.run {
+            guard self.isCurrentGeneration(generation) else { return }
             if text.isEmpty {
-                recordingOverlay.updateText("未识别到语音")
+                self.recordingOverlay.updateText("未识别到语音")
             } else if wasChanged {
-                recordingOverlay.updateText("✨ \(text)")
+                self.recordingOverlay.updateText("✨ \(text)")
             }
         }
         
@@ -513,18 +578,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         await MainActor.run {
+            guard self.isCurrentGeneration(generation) else {
+                logger.info("Dictation \(generation) ended while finalizing — overlay left untouched")
+                return
+            }
             if !text.isEmpty {
-                inject(text)
+                self.inject(text)
             } else {
                 logger.info("Empty or nil text result")
             }
-            recordingOverlay.dismiss()
-            statusBarController?.updateState(.idle)
+            self.recordingOverlay.dismiss()
+            self.statusBarController?.updateState(.idle)
         }
         
         // Cleanup: WAV recordings only exist when Cloud Transcription is
-        // enabled (RecordingFileWriter is gated on it); uploaded files stay in
-        // ~/Library/Application Support/DoubleTapTalk/Recordings (last 20).
+        // enabled (RecordingFileWriter is gated on it, and pruned to the newest
+        // 20 on finish); the rest stay in
+        // ~/Library/Application Support/DoubleTapTalk/Recordings until deleted
+        // from Settings.
     }
 }
 
@@ -535,7 +606,7 @@ enum LogLevel: String {
     case error = "ERROR"
 }
 
-class FileLogger {
+class FileLogger: @unchecked Sendable {
     static let shared = FileLogger()
     private let logURL: URL
     private let queue = DispatchQueue(label: "com.doubletaptalk.logger", attributes: .concurrent)

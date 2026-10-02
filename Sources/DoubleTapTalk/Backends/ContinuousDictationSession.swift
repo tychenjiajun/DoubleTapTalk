@@ -101,11 +101,12 @@ final class ContinuousDictationSession {
 
     private let audioEngine = AVAudioEngine()
     private var monoConverter: Mono16kConverter?
-    private let lock = NSLock()          // guards currentSegment + emissionChain
+    private let lock = NSLock()          // guards currentSegment + stopped
     private var currentSegment: Segment?
-    /// Serializes rotated-segment delivery; appended under `lock`, awaited
-    /// without it (never call back into the session while holding the lock).
-    private var emissionChain: Task<Void, Never>?
+    /// Serializes rotated-segment delivery in strict segment order (see
+    /// `OrderedTaskChain`). Appended under `lock`, drained without it (never
+    /// call back into the session while holding the lock).
+    private let emissions = OrderedTaskChain()
 
     private var idleTask: Task<Void, Never>?
     private let idleCheckInterval: TimeInterval = 0.5
@@ -121,9 +122,10 @@ final class ContinuousDictationSession {
         let request: SFSpeechAudioBufferRecognitionRequest
         var task: SFSpeechRecognitionTask?
         let recorder: RecordingFileWriter?
-        /// Mutated only on the recognizer's callback queue; read after the task
-        /// has finished (same convention as AppleSpeechBackend).
-        var transcript = RecognitionTranscript()
+        /// Written on the recognizer's callback queue, read from the emission
+        /// chain — always through `transcriptLock`.
+        private var transcript = RecognitionTranscript()
+        private let transcriptLock = NSLock()
 
         private let activityLock = NSLock()
         private var activity = RelaySegmentActivity()
@@ -144,6 +146,26 @@ final class ContinuousDictationSession {
             return activity.shouldRotate(now: now, threshold: threshold)
         }
 
+        /// The best text available right now (thread-safe snapshot).
+        var currentText: String {
+            transcriptLock.lock(); defer { transcriptLock.unlock() }
+            return transcript.currentText
+        }
+
+        private var hasFinal: Bool {
+            transcriptLock.lock(); defer { transcriptLock.unlock() }
+            return transcript.hasFinal
+        }
+
+        /// Waits (bounded) for Apple to commit the final result instead of
+        /// blindly sleeping a fixed interval.
+        func waitForFinalResult(timeout: TimeInterval) async {
+            let deadline = Date().addingTimeInterval(timeout)
+            while !hasFinal, Date() < deadline {
+                try? await Task.sleep(nanoseconds: 20_000_000)
+            }
+        }
+
         func handleRecognition(result: SFSpeechRecognitionResult?, error: Error?, session: ContinuousDictationSession) {
             if let error = error {
                 let ns = error as NSError
@@ -156,8 +178,11 @@ final class ContinuousDictationSession {
             guard let result = result else { return }
             let text = result.bestTranscription.formattedString
             let isFinal = result.isFinal
+            transcriptLock.lock()
             transcript.apply(transcript: text, isFinal: isFinal)
-            observeBestText(transcript.currentText)
+            let best = transcript.currentText
+            transcriptLock.unlock()
+            observeBestText(best)
             if isFinal {
                 session.onFinalText?(text)
             } else {
@@ -174,6 +199,10 @@ final class ContinuousDictationSession {
             throw PipelineError.transcriptionFailed(message)
         }
         segmentLocale = pair.locale
+        segmentSupportsOnDevice = pair.supportsOnDevice
+        if !pair.supportsOnDevice {
+            logger.warning("Apple has no on-device model for \(pair.locale.identifier) — relay recognition will use Apple's servers")
+        }
 
         let inputNode = audioEngine.inputNode
         let inputFormat = inputNode.outputFormat(forBus: 0)
@@ -212,21 +241,25 @@ final class ContinuousDictationSession {
     }
 
     private var segmentLocale: Locale?
+    /// Whether the resolved locale has an on-device model (required when it
+    /// does, so audio stays local; server fallback otherwise).
+    private var segmentSupportsOnDevice = false
     /// Set by `stop()` under `lock`; blocks further rotation so a stop can
     /// never race a segment swap (the stop would otherwise observe nil and
     /// drop the final transcript).
     private var stopped = false
 
-    /// Atomically ends the session state: marks stopped, claims the live
-    /// segment and snapshots the emission chain. Sync helper so `stop()` never
-    /// touches NSLock from an async context.
-    private func claimForStop() -> (segment: Segment?, pendingEmissions: Task<Void, Never>?) {
+    /// Atomically ends the session state: marks stopped and claims the live
+    /// segment. Sync helper so `stop()` never touches NSLock from an async
+    /// context. Marking `stopped` here also blocks any further rotation, so no
+    /// new emission can be appended after this returns.
+    private func claimForStop() -> Segment? {
         lock.lock()
         defer { lock.unlock() }
         stopped = true
         let segment = currentSegment
         currentSegment = nil
-        return (segment, emissionChain)
+        return segment
     }
 
     /// Stops the whole dictation session, returning the final segment's result.
@@ -240,13 +273,13 @@ final class ContinuousDictationSession {
         audioEngine.stop()
         audioEngine.inputNode.removeTap(onBus: 0)
 
-        let claim = claimForStop()
+        let segment = claimForStop()
 
         // Wait for every in-flight rotation to finalize + deliver first —
         // guarantees the caller's final segment is enqueued after them.
-        await claim.pendingEmissions?.value
+        await emissions.drain()
 
-        guard let segment = claim.segment else {
+        guard let segment else {
             return SegmentTranscript(text: "", recordingFileURL: nil)
         }
         return await finalizeSegment(segment)
@@ -265,6 +298,7 @@ final class ContinuousDictationSession {
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
         request.taskHint = .dictation
+        request.requiresOnDeviceRecognition = segmentSupportsOnDevice
 
         // Record only when cloud transcription is on: the WAV exists purely to
         // be uploaded, so with ASR disabled no audio ever touches disk.
@@ -290,11 +324,13 @@ final class ContinuousDictationSession {
     private func startIdleWatch() {
         idleTask?.cancel()
         let interval = idleCheckInterval
+        // Runs off the main thread: rotation builds a recognizer + recording
+        // file, which must not block the UI.
         idleTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
                 guard !Task.isCancelled, let self else { return }
-                await MainActor.run { self.checkIdle() }
+                self.checkIdle()
             }
         }
     }
@@ -339,11 +375,10 @@ final class ContinuousDictationSession {
     }
 
     /// Appends finalize+deliver of `segment` to the emission chain (strictly
-    /// ordered). Caller must hold `lock`.
+    /// ordered). Caller must hold `lock`; `enqueue` only schedules, so it never
+    /// re-enters the session here.
     private func chainEmission(of segment: Segment) {
-        let previous = emissionChain
-        emissionChain = Task { [weak self] in
-            await previous?.value
+        emissions.enqueue { [weak self] in
             guard let self else { return }
             let transcript = await self.finalizeSegment(segment)
             await self.onSegmentTranscript?(transcript)
@@ -356,21 +391,25 @@ final class ContinuousDictationSession {
     private func finalizeSegment(_ segment: Segment) async -> SegmentTranscript {
         segment.task?.finish()
         segment.request.endAudio()
-        try? await Task.sleep(nanoseconds: 700_000_000)
+        // Wait (bounded) for the committed final result — the recognizer needs
+        // a beat after endAudio, but a fixed sleep is both slow and flaky.
+        await segment.waitForFinalResult(timeout: 1.5)
         segment.task = nil
 
-        let text = segment.transcript.currentText
+        let text = segment.currentText
         // Skip segments Apple heard no words in: discard the recording so blank
-        // audio is never kept or uploaded to cloud ASR.
+        // audio is never kept or uploaded to cloud ASR. Also discard when cloud
+        // transcription was turned off mid-recording — the WAV exists only to
+        // be uploaded, so nothing should stay on disk.
         let hasWords = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let recordingURL: URL?
-        if hasWords {
+        if hasWords, ASRSettings.current().enabled {
             recordingURL = segment.recorder?.finish()
         } else {
             segment.recorder?.cancel()
             recordingURL = nil
         }
-        logger.info("Relay segment result: '\(text)' (recording: \(recordingURL?.path ?? "skipped — no words"))")
+        logger.info("Relay segment result: '\(text)' (recording: \(recordingURL?.path ?? "skipped"))")
         return SegmentTranscript(text: text, recordingFileURL: recordingURL)
     }
 

@@ -133,7 +133,11 @@ enum SpeechLocaleMapper {
 /// SFSpeechRecognizer for it. Shared by the single-shot backend and the
 /// continuous dictation session.
 enum SpeechRecognizerFactory {
-    static func make(locale code: String?, inputMethodLanguage: String?) -> (recognizer: SFSpeechRecognizer, locale: Locale)? {
+    /// `supportsOnDevice` is Apple's verdict on whether the resolved locale has
+    /// an on-device model available — callers use it to *require* on-device
+    /// recognition so the promise that audio stays on the Mac holds whenever
+    /// Apple can honour it.
+    static func make(locale code: String?, inputMethodLanguage: String?) -> (recognizer: SFSpeechRecognizer, locale: Locale, supportsOnDevice: Bool)? {
         var locale = SpeechLocaleMapper.locale(for: code, inputMethodLanguage: inputMethodLanguage)
         var recognizer = SFSpeechRecognizer(locale: locale)
         if recognizer == nil {
@@ -148,7 +152,7 @@ enum SpeechRecognizerFactory {
             }
         }
         guard let recognizer = recognizer else { return nil }
-        return (recognizer, locale)
+        return (recognizer, locale, recognizer.supportsOnDeviceRecognition)
     }
 }
 
@@ -201,6 +205,9 @@ final class AppleSpeechBackend: NSObject, SFSpeechRecognizerDelegate {
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var transcript = RecognitionTranscript()
+    /// Written on the recognizer's callback queue, read from whichever thread
+    /// calls `stop()` — always through this lock.
+    private let transcriptLock = NSLock()
 
     /// WAV file of the captured audio (16 kHz mono), finalized on `stop()`.
     /// nil when nothing was recorded or recording failed to start.
@@ -232,10 +239,18 @@ final class AppleSpeechBackend: NSObject, SFSpeechRecognizerDelegate {
         let recognizer = pair.recognizer
         let locale = pair.locale
 
+        transcriptLock.lock()
         transcript.reset()
+        transcriptLock.unlock()
         let recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
         recognitionRequest.shouldReportPartialResults = true
         recognitionRequest.taskHint = .dictation
+        // Keep audio on the Mac whenever Apple has an on-device model; only
+        // languages without one use Apple's servers.
+        recognitionRequest.requiresOnDeviceRecognition = pair.supportsOnDevice
+        if !pair.supportsOnDevice {
+            logger.warning("Apple has no on-device model for \(locale.identifier) — recognition will use Apple's servers")
+        }
         self.recognitionRequest = recognitionRequest
 
         recognitionTask = recognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
@@ -251,7 +266,9 @@ final class AppleSpeechBackend: NSObject, SFSpeechRecognizerDelegate {
             guard let result = result else { return }
             let text = result.bestTranscription.formattedString
             let isFinal = result.isFinal
+            self.transcriptLock.lock()
             self.transcript.apply(transcript: text, isFinal: isFinal)
+            self.transcriptLock.unlock()
             if isFinal {
                 self.onFinalText?(text)
             } else {
@@ -313,8 +330,9 @@ final class AppleSpeechBackend: NSObject, SFSpeechRecognizerDelegate {
         logger.info("Stopping Apple streaming recognition...")
         recognitionTask?.finish()
 
-        // Give SFSpeechRecognizer a short window to commit the final result.
-        try? await Task.sleep(nanoseconds: 700_000_000)
+        // Wait (bounded) for SFSpeechRecognizer to commit the final result —
+        // a fixed sleep would be both slow and flaky.
+        await waitForFinalResult(timeout: 1.5)
 
         audioEngine.stop()
         audioEngine.inputNode.removeTap(onBus: 0)
@@ -322,14 +340,15 @@ final class AppleSpeechBackend: NSObject, SFSpeechRecognizerDelegate {
         recognitionRequest = nil
         recognitionTask = nil
 
-        let text = transcript.currentText
+        let text = transcriptSnapshot()
         logger.info("Apple recognition result: '\(text)'")
 
         // Finalize the recorded audio. Segments with no recognized words are
         // skipped entirely — the blank recording is deleted so it is never kept
-        // or sent to cloud ASR.
+        // or sent to cloud ASR. Discard it too when cloud transcription was
+        // disabled mid-recording: the WAV only exists to be uploaded.
         let hasWords = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        if hasWords {
+        if hasWords, ASRSettings.current().enabled {
             recordingFileURL = recorder?.finish()
         } else {
             recorder?.cancel()
@@ -338,6 +357,27 @@ final class AppleSpeechBackend: NSObject, SFSpeechRecognizerDelegate {
         recorder = nil
 
         return text
+    }
+
+    private func transcriptSnapshot() -> String {
+        transcriptLock.lock()
+        defer { transcriptLock.unlock() }
+        return transcript.currentText
+    }
+
+    /// Polls (bounded) until Apple commits a final result or the timeout
+    /// elapses — cheaper than always sleeping the full interval.
+    private func waitForFinalResult(timeout: TimeInterval) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !hasFinalResult(), Date() < deadline {
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+    }
+
+    private func hasFinalResult() -> Bool {
+        transcriptLock.lock()
+        defer { transcriptLock.unlock() }
+        return transcript.hasFinal
     }
 
     // MARK: - Helpers

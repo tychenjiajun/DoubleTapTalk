@@ -7,7 +7,7 @@ import XCTest
 final class RelaySegmentActivityTests: XCTestCase {
 
     func testSilentSegmentNeverRotates() {
-        var activity = RelaySegmentActivity()
+        let activity = RelaySegmentActivity()
         XCTAssertFalse(activity.hasHeardText)
         // Even far in the future, a segment that never heard text must not rotate.
         XCTAssertFalse(activity.shouldRotate(now: Date().addingTimeInterval(60), threshold: 3))

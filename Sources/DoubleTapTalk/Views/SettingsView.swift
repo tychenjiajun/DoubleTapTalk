@@ -14,6 +14,10 @@ struct SettingsView: View {
     @State private var showASRApiKey: Bool = false
     @State private var asrBaseURLInput: String = ""
 
+    // Recordings storage state
+    @State private var recordingStats: RecordingStoreStats = .empty
+    @State private var showDeleteRecordingsConfirm: Bool = false
+
     // Accessibility and microphone info state
     @State private var hasAccessibilityPermission: Bool = AccessibilityService.shared.hasAccessibilityPermission()
     @State private var currentMicrophoneName: String? = nil
@@ -27,7 +31,7 @@ struct SettingsView: View {
                     Text("Apple (On-Device)")
                         .fontWeight(.medium)
                 }
-                Text("On-device streaming recognition by Apple Speech. Live text appears while you speak — no API key, audio never leaves your Mac.")
+                Text("Apple on-device streaming recognition (Apple's servers are used only when no on-device model exists for the language). Live text appears while you speak — no API key; audio is written to disk only when Cloud Transcription is enabled.")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
@@ -263,7 +267,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Enable Cloud Transcription")
                             .fontWeight(.medium)
-                        Text("After recording, the audio file is sent to an OpenAI-compatible ASR endpoint (e.g. Aliyun DashScope qwen3-asr-flash) for a more accurate result. Falls back to Apple on-device recognition on any failure.")
+                        Text("After recording, the audio file is sent to an OpenAI-compatible ASR endpoint (e.g. Aliyun DashScope qwen3-asr-flash) for a more accurate result. Falls back to Apple recognition on any failure.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -321,7 +325,7 @@ struct SettingsView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "waveform.badge.record")
                                 .foregroundColor(.secondary)
-                            Text("Recordings are saved to Application Support/DoubleTapTalk/Recordings (last 20 kept).")
+                            Text("Recordings are saved to Application Support/DoubleTapTalk/Recordings — see Recordings below to view usage, open the folder or delete them.")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         }
@@ -331,13 +335,53 @@ struct SettingsView: View {
             } header: {
                 Text("Cloud Transcription (OpenAI-compatible ASR)")
             } footer: {
-                Text(settings.asrEnabled ? "Live text during recording stays Apple on-device. The cloud result replaces the injected text only when the request succeeds." : "Optional: server-side transcription beats Apple on accuracy — requires an OpenAI-compatible ASR endpoint.")
+                Text(settings.asrEnabled ? "Live text during recording stays Apple on-device (server fallback only when Apple has no on-device model for the language). The cloud result replaces the injected text only when the request succeeds." : "Optional: server-side transcription beats Apple on accuracy — requires an OpenAI-compatible ASR endpoint.")
+                    .font(.caption)
+            }
+
+            // MARK: - Recordings Storage Section
+            Section {
+                HStack {
+                    Text("On disk:")
+                    Spacer()
+                    Text("\(recordingStats.fileCount) file\(recordingStats.fileCount == 1 ? "" : "s") · \(recordingStats.formattedSize)")
+                        .monospacedDigit()
+                        .foregroundColor(.secondary)
+                    Button("Refresh") {
+                        refreshRecordingStats()
+                    }
+                    .buttonStyle(.borderless)
+                }
+                HStack(spacing: 12) {
+                    Button("Open Folder") {
+                        RecordingStore.openInFinder(directory: RecordingStore.directory)
+                    }
+                    Button(role: .destructive) {
+                        showDeleteRecordingsConfirm = true
+                    } label: {
+                        Text("Delete All Recordings…")
+                    }
+                    .disabled(recordingStats.fileCount == 0)
+                }
+            } header: {
+                Text("Recordings")
+            } footer: {
+                Text("WAV recordings exist only when Cloud Transcription is enabled; they are kept on this Mac for upload and the newest 20 are kept automatically. Delete them here at any time.")
                     .font(.caption)
             }
         }
         .formStyle(.grouped)
         .padding()
         .frame(width: 480)
+        .confirmationDialog("Delete all recordings?", isPresented: $showDeleteRecordingsConfirm) {
+            Button("Delete All Recordings", role: .destructive) {
+                RecordingStore.deleteAll(in: RecordingStore.directory)
+                refreshRecordingStats()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("\(recordingStats.fileCount) file\(recordingStats.fileCount == 1 ? "" : "s") (\(recordingStats.formattedSize)) will be permanently deleted.")
+        }
         .onAppear {
             llmApiKeyInput = settings.llmAPIKey ?? ""
             llmBaseURLInput = settings.llmBaseURL ?? ""
@@ -345,6 +389,7 @@ struct SettingsView: View {
             asrBaseURLInput = settings.asrBaseURL ?? ""
             hasAccessibilityPermission = AccessibilityService.shared.hasAccessibilityPermission()
             currentMicrophoneName = MicrophonePermissionService.shared.currentMicrophoneName()
+            refreshRecordingStats()
         }
         .onChange(of: settings.llmBaseURL) { newValue in
             llmBaseURLInput = newValue ?? ""
@@ -358,5 +403,10 @@ struct SettingsView: View {
         .onChange(of: settings.asrAPIKey) { newValue in
             asrApiKeyInput = newValue ?? ""
         }
+    }
+
+    /// Recomputes the recordings usage shown in the Recordings section.
+    private func refreshRecordingStats() {
+        recordingStats = RecordingStore.stats(in: RecordingStore.directory)
     }
 }

@@ -97,7 +97,7 @@ final class SpeechLocaleMapperTests: XCTestCase {
             "es-ES", "fr-FR", "de-DE", "it-IT", "pt-BR", "ru-RU",
         ]
         XCTAssertTrue(supported.contains(loc.identifier), "auto must resolve to a real dictation locale, got \(loc.identifier)")
-        let lang = Locale.current.languageCode ?? ""
+        let lang = Locale.current.language.languageCode?.identifier ?? ""
         if ["zh", "en", "ja", "ko", "es", "fr", "de"].contains(lang) {
             XCTAssertTrue(loc.identifier.hasPrefix(lang), "auto locale \(loc.identifier) should match system language \(lang)")
         }
