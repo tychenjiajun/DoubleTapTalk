@@ -243,10 +243,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        await MainActor.run {
-            recordingOverlay.show()
-        }
-
         let session = ContinuousDictationSession(idleThreshold: DoubleTapTalkSettings.shared.relayIdleThreshold)
         session.onLiveText = { [weak self] text in
             Task { @MainActor in self?.recordingOverlay.updateLiveText(text) }
@@ -322,9 +318,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func stopRecording() {
         statusBarController?.updateState(.processing)
         logger.info("Recording stopped")
-        // Freeze the overlay's elapsed-seconds counter: what follows is
-        // transcription/polish time, not speaking time.
-        recordingOverlay.stopRecordingTimer()
 
         // Captured now: any result produced from here on is only allowed to be
         // injected while this is still the newest dictation.

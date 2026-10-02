@@ -11,7 +11,6 @@ import QuartzCore
 /// audio level while it is actually uploading or polishing.
 final class RecordingOverlayPanel: NSPanel {
     private let label = NSTextField(labelWithString: "")
-    private let timerLabel = NSTextField(labelWithString: "0s")
     private let sessionTimerLabel = NSTextField(labelWithString: "0s")
     private let sessionStatusLabel = NSTextField(labelWithString: "")
     private let sessionColumn = NSStackView()
@@ -20,7 +19,6 @@ final class RecordingOverlayPanel: NSPanel {
     private var borderView: NSView?
     private var animator = WaveformAnimator()
     private let busyWaveform = IndeterminateWaveform()
-    private var busyPhase: Float = 0
     private var displayTimer: Timer?
     private var autoDismissTimer: Timer?
 
@@ -28,12 +26,7 @@ final class RecordingOverlayPanel: NSPanel {
     private let hPadding: CGFloat = OverlayMetrics.horizontalPadding
     private let waveSize: CGFloat = OverlayMetrics.waveformSlot
     private let stackGap: CGFloat = OverlayMetrics.stackGap
-    private let timerWidth: CGFloat = OverlayMetrics.timerSlot
     private var isShowing = false
-
-    /// Presentation axis. `.focused` is the one-shot transcript capsule;
-    /// `.session` is the persistent continuous-dictation HUD.
-    private var layout: OverlayLayout = .focused
 
     /// Current pipeline stage and the transcript streamed while listening.
     private var state: OverlayState = .listening
@@ -49,6 +42,8 @@ final class RecordingOverlayPanel: NSPanel {
     private var isCompact = false
     private var receipt: Receipt?
     private var borderFlash: (tint: OverlayStyle.Tint, until: Date)?
+    private var pendingLevel: Float = 0
+    private var busyPhase: Float = 0
 
     /// A short-lived confirmation in the session status column. Never replaces
     /// the text row — the user's words stay readable the whole time.
@@ -57,11 +52,6 @@ final class RecordingOverlayPanel: NSPanel {
         let tint: OverlayStyle.Tint
         let expires: Date
     }
-
-    /// Elapsed-seconds clock shown at the trailing edge of the capsule.
-    private var startedAt: Date?
-    private var elapsedSeconds = 0
-    private var isTimerRunning = false
 
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
@@ -78,28 +68,14 @@ final class RecordingOverlayPanel: NSPanel {
 
     // MARK: - Public API
 
-    /// Presents the capsule in the listening state with an empty transcript.
-    func show() {
-        isShowing = true
-        state = .listening
-        liveText = ""
-        busyPhase = 0
-        resolved = style(for: state)
-        // A pending error auto-dismiss must never take down a live recording.
-        stopAutoDismiss()
-        startRecordingTimer()
-        applyStyle()
-        present()
-    }
-
     /// Live on-device transcript while the user is speaking.
     func updateLiveText(_ text: String) {
         guard isShowing else { return }
-        // In session mode an upload/polish stage may be running while the user
-        // is already speaking the next segment: new words must not stomp that
-        // stage back to "listening".
-        let busyWhileSession = layout == .session && (state == .transcribing || state == .polishing)
-        if !busyWhileSession {
+        // An upload/polish stage may be running while the user is already
+        // speaking the next segment: new words must not stomp that stage back
+        // to "listening".
+        let busy = state == .transcribing || state == .polishing
+        if !busy {
             state = .listening
             liveText = text
             busyPhase = 0
@@ -145,7 +121,6 @@ final class RecordingOverlayPanel: NSPanel {
     /// Switches the capsule into the persistent session HUD. Called when a
     /// relay session opens; the placement does not change.
     func beginRelaySession(idleThreshold: TimeInterval) {
-        layout = .session
         ledger.reset()
         receipt = nil
         borderFlash = nil
@@ -168,7 +143,6 @@ final class RecordingOverlayPanel: NSPanel {
     /// A segment started its work (an idle rotation). Only the counter moves —
     /// the stage itself is reported through `showTranscribing`/`showPolishing`.
     func noteSegmentStarted() {
-        guard layout == .session else { return }
         ledger.noteSegmentStarted()
         refreshSessionStatus()
     }
@@ -177,7 +151,6 @@ final class RecordingOverlayPanel: NSPanel {
     /// The receipt carries the segment number — the user maps receipts onto
     /// what they said.
     func noteSegmentInserted(characters: Int) {
-        guard layout == .session else { return }
         ledger.noteInserted(characters: characters)
         state = .listening
         resolved = style(for: state)
@@ -193,14 +166,12 @@ final class RecordingOverlayPanel: NSPanel {
 
     /// The session's last segment (the one produced by the stop tap) landed.
     func noteFinalSegmentInserted(characters: Int) {
-        guard layout == .session else { return }
         ledger.noteSegmentStarted()
         ledger.noteInserted(characters: characters)
     }
 
     /// A rotation with no recognized words: nothing is uploaded or inserted.
     func noteSegmentSkipped() {
-        guard layout == .session else { return }
         ledger.noteSkipped()
         state = .listening
         resolved = style(for: state)
@@ -215,7 +186,6 @@ final class RecordingOverlayPanel: NSPanel {
     /// A segment was recognized but never inserted (polish came back empty).
     /// Leaves a persistent chip: silence here would read as "it saved my words".
     func noteSegmentFailed() {
-        guard layout == .session else { return }
         ledger.noteFailed()
         state = .listening
         resolved = style(for: state)
@@ -260,14 +230,6 @@ final class RecordingOverlayPanel: NSPanel {
         scheduleAutoDismiss(after: OverlaySessionCopy.summaryDuration)
     }
 
-    /// Freezes the seconds counter (recording ended; the capsule may still be
-    /// showing "transcribing…").
-    func stopRecordingTimer() {
-        guard isTimerRunning else { return }
-        isTimerRunning = false
-        refreshTimerLabel()
-    }
-
     /// Raw audio level in 0...1 — smoothed by the animator at display rate.
     func setAudioLevel(_ level: Float) {
         guard isShowing, displayTimer != nil else { return }
@@ -280,8 +242,6 @@ final class RecordingOverlayPanel: NSPanel {
     func dismiss() {
         guard isShowing else { return }
         isShowing = false
-        isTimerRunning = false
-        startedAt = nil
         stopDisplayTimer()
         stopAutoDismiss()
 
@@ -358,20 +318,15 @@ final class RecordingOverlayPanel: NSPanel {
 
     private lazy var overlayLanguage: OverlayLanguage = OverlayStyle.language()
 
-    /// What the capsule actually shows. In session mode the text row stays the
-    /// in-progress words no matter which stage is running — the document is the
-    /// transcript there, and the stage lives in the status column instead.
+    /// What the capsule actually shows. The text row stays the in-progress
+    /// words no matter which stage is running — the document is the transcript
+    /// there, and the stage lives in the status column instead.
     private var displayText: String {
         let hasText = !liveText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        switch layout {
-        case .focused:
-            return (resolved.prefersText && hasText) ? liveText : resolved.statusText
-        case .session:
-            // Nothing spoken yet: the status column already reports the stage,
-            // so the text row stays empty instead of trailing a lone "…".
-            guard state != .success else { return resolved.statusText }
-            return hasText ? liveText : ""
-        }
+        // Nothing spoken yet: the status column already reports the stage,
+        // so the text row stays empty instead of trailing a lone "…".
+        guard state != .success else { return resolved.statusText }
+        return hasText ? liveText : ""
     }
 
     // MARK: - Styling
@@ -385,29 +340,22 @@ final class RecordingOverlayPanel: NSPanel {
         waveformView.setTint(tintColor(for: resolved.tint))
         refreshLabelStyle()
         refreshBorder()
-        refreshTimerAlpha()
-        refreshTimerLabel()
         refreshSessionStatus()
     }
 
-    /// Text row emphasis. In session mode the document is the transcript, so
-    /// the live words step back — and step back further while a stage is
-    /// running, so nothing on screen can be mistaken for "the system is
-    /// working" other than the status column.
+    /// Text row emphasis. The document is the transcript, so the live words
+    /// step back — and step back further while a stage is running, so nothing
+    /// on screen can be mistaken for "the system is working" other than the
+    /// status column.
     private func refreshLabelStyle() {
         let hasText = !liveText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let busy = state == .transcribing || state == .polishing
-        switch layout {
-        case .focused:
-            label.textColor = NSColor.white.withAlphaComponent(0.92)
-        case .session:
-            if hasText && busy {
-                label.textColor = NSColor.white.withAlphaComponent(0.4)
-            } else if hasText {
-                label.textColor = NSColor.white.withAlphaComponent(0.78)
-            } else {
-                label.textColor = NSColor.white.withAlphaComponent(0.85)
-            }
+        if hasText && busy {
+            label.textColor = NSColor.white.withAlphaComponent(0.4)
+        } else if hasText {
+            label.textColor = NSColor.white.withAlphaComponent(0.78)
+        } else {
+            label.textColor = NSColor.white.withAlphaComponent(0.85)
         }
     }
 
@@ -435,8 +383,6 @@ final class RecordingOverlayPanel: NSPanel {
     /// current stage → segment counter. The failure chip outranks the stage so a
     /// lost segment is never hidden by a passing upload.
     private func refreshSessionStatus() {
-        guard layout == .session else { return }
-
         if let receipt {
             sessionStatusLabel.stringValue = receipt.text
             sessionStatusLabel.textColor = tintColor(for: receipt.tint).withAlphaComponent(0.95)
@@ -467,10 +413,10 @@ final class RecordingOverlayPanel: NSPanel {
     }
 
     private func refreshSessionTimer() {
-        guard layout == .session, let startedAt = sessionStartedAt else { return }
-        sessionTimerLabel.stringValue = OverlayMetrics.elapsedLabel(
-            seconds: Int(Date().timeIntervalSince(startedAt)))
-        let dim = resolved.dimsTimer || elapsedSeconds < OverlayStyle.timerRevealSecond
+        guard let startedAt = sessionStartedAt else { return }
+        let seconds = Int(Date().timeIntervalSince(startedAt))
+        sessionTimerLabel.stringValue = OverlayMetrics.elapsedLabel(seconds: seconds)
+        let dim = resolved.dimsTimer || seconds < OverlayStyle.timerRevealSecond
         sessionTimerLabel.alphaValue = dim ? 0.35 : 1.0
     }
 
@@ -491,8 +437,6 @@ final class RecordingOverlayPanel: NSPanel {
     }
 
     // MARK: - Internals
-
-    private var pendingLevel: Float = 0
 
     private func setupCapsule() {
         isFloatingPanel = true
@@ -561,15 +505,6 @@ final class RecordingOverlayPanel: NSPanel {
         label.setContentHuggingPriority(.defaultLow, for: .horizontal)
         stack.addArrangedSubview(label)
 
-        // Elapsed seconds (kept at the trailing edge, fixed width so the
-        // capsule doesn't jitter as digits change).
-        timerLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
-        timerLabel.textColor = NSColor.white.withAlphaComponent(0.6)
-        timerLabel.alignment = .right
-        timerLabel.setContentHuggingPriority(.required, for: .horizontal)
-        timerLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
-        stack.addArrangedSubview(timerLabel)
-
         // Session HUD trailing column: elapsed clock on top, segment status
         // underneath. Fixed width, right aligned — the capsule must not reflow
         // when "识别中…" becomes "✓ 已插入 · 24 字".
@@ -596,7 +531,6 @@ final class RecordingOverlayPanel: NSPanel {
         NSLayoutConstraint.activate([
             waveformView.widthAnchor.constraint(equalToConstant: waveSize),
             waveformView.heightAnchor.constraint(equalToConstant: 32),
-            timerLabel.widthAnchor.constraint(equalToConstant: timerWidth),
             sessionColumn.widthAnchor.constraint(equalToConstant: OverlayMetrics.sessionTrailingWidth),
             stack.leadingAnchor.constraint(equalTo: effect.leadingAnchor, constant: hPadding),
             stack.trailingAnchor.constraint(equalTo: effect.trailingAnchor, constant: -hPadding),
@@ -604,19 +538,15 @@ final class RecordingOverlayPanel: NSPanel {
         ])
     }
 
-    /// Applies the layout axis: one-shot mode wraps and shows a single clock;
-    /// session mode is one truncated line plus the status column.
     /// Session layout: one truncated line, so the type steps down a point to
     /// buy horizontal room instead of wrapping.
     private func applyLayout() {
-        let session = layout == .session
         // The closing summary carries the whole receipt in its text, so the
         // status column would only repeat it.
-        sessionColumn.isHidden = !session || state == .success
-        timerLabel.isHidden = session
-        label.maximumNumberOfLines = session ? 1 : OverlayMetrics.maxLines
-        label.lineBreakMode = session ? .byTruncatingTail : .byWordWrapping
-        label.font = .systemFont(ofSize: session ? 14 : 15, weight: .medium)
+        sessionColumn.isHidden = state == .success
+        label.maximumNumberOfLines = 1
+        label.lineBreakMode = .byTruncatingTail
+        label.font = .systemFont(ofSize: 14, weight: .medium)
     }
 
     /// Orders the capsule in: geometry and opacity land synchronously, the
@@ -653,28 +583,19 @@ final class RecordingOverlayPanel: NSPanel {
         glide.timingFunction = CAMediaTimingFunction(controlPoints: 0.175, 0.885, 0.32, 1.1)
         layer.add(glide, forKey: "entryGlide")
     }
-    /// Target frame for the current text: elastic width, wrapping height.
+    /// Target frame for the current text: fixed session width, wrapping height.
     private func preparedFrame() -> NSRect {
-        switch layout {
-        case .focused:
-            let text = displayText
-            let width = OverlayMetrics.capsuleWidth(for: text)
-            layoutLabel(for: width, padding: OverlayMetrics.internalPadding)
-            let height = measuredHeight(for: text, width: width)
-            return centeredFrame(width: width, height: height)
-        case .session:
-            if isCompact {
-                // A narrow pill squeezes the flexible label out on its own: no
-                // hide/animate bookkeeping, and the placement never moves.
-                layoutLabel(for: OverlayMetrics.sessionCompactWidth, padding: OverlayMetrics.sessionInternalPadding)
-                return centeredFrame(width: OverlayMetrics.sessionCompactWidth,
-                                     height: OverlayMetrics.sessionCompactHeight)
-            }
-            let width = OverlayMetrics.sessionWidth(for: displayText,
-                                                     trailingExtra: sessionTrailingExtraInUse)
-            layoutLabel(for: width, padding: OverlayMetrics.internalPadding + sessionTrailingExtraInUse)
-            return centeredFrame(width: width, height: OverlayMetrics.sessionHeight)
+        if isCompact {
+            // A narrow pill squeezes the flexible label out on its own: no
+            // hide/animate bookkeeping, and the placement never moves.
+            layoutLabel(for: OverlayMetrics.sessionCompactWidth, padding: OverlayMetrics.sessionInternalPadding)
+            return centeredFrame(width: OverlayMetrics.sessionCompactWidth,
+                                 height: OverlayMetrics.sessionCompactHeight)
         }
+        let width = OverlayMetrics.sessionWidth(for: displayText,
+                                                 trailingExtra: sessionTrailingExtraInUse)
+        layoutLabel(for: width, padding: OverlayMetrics.internalPadding + sessionTrailingExtraInUse)
+        return centeredFrame(width: width, height: OverlayMetrics.sessionHeight)
     }
 
     /// How much width the status column currently takes from the text row.
@@ -737,18 +658,6 @@ final class RecordingOverlayPanel: NSPanel {
         label.preferredMaxLayoutWidth = max(width - padding, 40)
     }
 
-    /// Capsule height from the label's *real* wrapped size (AppKit-accurate),
-    /// clamped to `maxLines`; falls back to the pure estimate if AppKit reports
-    /// nothing usable yet.
-    private func measuredHeight(for text: String, width: CGFloat) -> CGFloat {
-        let measured = label.intrinsicContentSize.height
-        guard measured > 0 else {
-            return OverlayMetrics.height(forLines: OverlayMetrics.lineCount(for: text, width: width))
-        }
-        let lines = Int((measured / OverlayMetrics.lineHeight).rounded())
-        return OverlayMetrics.height(forLines: lines)
-    }
-
     private func centeredFrame(width: CGFloat, height: CGFloat) -> NSRect {
         guard let screen = NSScreen.main else {
             return NSRect(x: 0, y: 100, width: width, height: height)
@@ -759,34 +668,7 @@ final class RecordingOverlayPanel: NSPanel {
         return NSRect(x: x, y: y, width: width, height: height)
     }
 
-    // MARK: - Seconds counter
-
-    private func startRecordingTimer() {
-        startedAt = Date()
-        elapsedSeconds = 0
-        isTimerRunning = true
-        timerLabel.stringValue = OverlayMetrics.elapsedLabel(seconds: 0)
-        refreshTimerAlpha()
-    }
-
-    private func refreshTimerLabel() {
-        guard let startedAt else { return }
-        let seconds = isTimerRunning ? Int(Date().timeIntervalSince(startedAt)) : elapsedSeconds
-        elapsedSeconds = seconds
-        let text = OverlayMetrics.elapsedLabel(seconds: seconds)
-        if timerLabel.stringValue != text {
-            timerLabel.stringValue = text
-        }
-        refreshTimerAlpha()
-    }
-
-    /// The clock is dimmed while it is still uninteresting ("0s") and while
-    /// post-recording work runs — it never grows back to full attention on its
-    /// own.
-    private func refreshTimerAlpha() {
-        let uninteresting = resolved.dimsTimer || elapsedSeconds < OverlayStyle.timerRevealSecond
-        timerLabel.alphaValue = uninteresting ? 0.35 : 1.0
-    }
+    // MARK: - Display timer
 
     private func startDisplayTimer() {
         stopDisplayTimer()
@@ -838,7 +720,6 @@ final class RecordingOverlayPanel: NSPanel {
     }
 
     private func tick() {
-        refreshTimerLabel()
         // ~1.7 s for a full out-and-back sweep.
         busyPhase += 1.0 / 30.0 * 0.6
         renderActivitySlot()
@@ -848,8 +729,6 @@ final class RecordingOverlayPanel: NSPanel {
     /// Per-frame bookkeeping for the session HUD: expire the receipt, release
     /// the border flash, and collapse the pill while the user is silent.
     private func tickSessionState() {
-        guard layout == .session else { return }
-
         if let receipt, Date() >= receipt.expires {
             self.receipt = nil
             refreshSessionStatus()

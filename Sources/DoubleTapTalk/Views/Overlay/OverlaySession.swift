@@ -1,20 +1,5 @@
 import Foundation
 
-/// Which layout the capsule uses.
-///
-/// The two continuous-dictation modes have opposite jobs. A one-shot dictation
-/// is over in seconds, so the capsule is the transcript: elastic width, up to
-/// four lines, then gone. A relay session stays on screen for minutes, the
-/// user's document is the real output, so the capsule becomes a fixed-height
-/// status HUD: one dimmed line of in-progress words plus a segment/status
-/// column — and it must never grow into the typing area.
-enum OverlayLayout: Equatable {
-    /// Transient one-shot presentation.
-    case focused
-    /// Persistent continuous-dictation HUD.
-    case session
-}
-
 /// Pure bookkeeping for one continuous-dictation session: what the user said,
 /// what actually landed in the document, and what did not. The overlay owns one
 /// of these so the AppDelegate never has to aggregate anything.
