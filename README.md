@@ -46,7 +46,7 @@ DoubleTapTalk transforms how you interact with your Mac. Instead of typing, **sp
 - **Zero Setup**: No API keys, no accounts, no configuration
 - **Menu Bar Design**: Runs quietly without Dock icon clutter
 - **⚡ Streaming Live Text** (Apple backend): watch your words appear live as you speak
-- **🎛️ Recording Overlay**: frameless capsule with real-time waveform + live transcription, spring animations
+- **🎛️ Recording Overlay**: frameless capsule with real-time waveform, a live recording-seconds counter, and live transcription. It widens as you speak and, for long sentences, wraps to up to 4 lines (the capsule grows taller) instead of truncating.
 - **🔁 Continuous Dictation (Relay, opt-in)**: with the toggle enabled in Settings, the mic stays open the whole time — after a pause (default 3 s, configurable) the current segment is recognized + inserted and a new one starts, so you can dictate long passages with thinking breaks. Segments with no words recognized by Apple are skipped entirely — blank audio is never kept or uploaded to cloud ASR.
 - **🌩️ Cloud Transcription (optional)**: when enabled, the recording is saved as a WAV file and sent to an OpenAI-compatible ASR endpoint (e.g. Aliyun DashScope `qwen3-asr-flash`); any failure falls back to Apple's on-device result. With the feature off, no audio is ever written to disk.
 

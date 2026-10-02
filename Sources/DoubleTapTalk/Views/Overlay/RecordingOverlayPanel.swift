@@ -6,16 +6,23 @@ import QuartzCore
 /// animations. Feed it audio levels + text; it handles all animation.
 final class RecordingOverlayPanel: NSPanel {
     private let label = NSTextField(labelWithString: "")
+    private let timerLabel = NSTextField(labelWithString: "0s")
     private let waveformView = WaveformView()
     private weak var capsuleView: NSVisualEffectView?
     private var animator = WaveformAnimator()
     private var displayTimer: Timer?
 
-    private let capsuleHeight: CGFloat = 56
+    private let capsuleHeight: CGFloat = OverlayMetrics.baseHeight
     private let hPadding: CGFloat = 24
     private let waveSize: CGFloat = 44
     private let stackGap: CGFloat = 14
+    private let timerWidth: CGFloat = 42
     private var isShowing = false
+
+    /// Elapsed-seconds clock shown at the trailing edge of the capsule.
+    private var startedAt: Date?
+    private var elapsedSeconds = 0
+    private var isTimerRunning = false
 
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
@@ -35,10 +42,13 @@ final class RecordingOverlayPanel: NSPanel {
     func show(text: String = "Listening…") {
         isShowing = true
         label.stringValue = text
+        startRecordingTimer()
 
         let width = OverlayMetrics.capsuleWidth(for: text)
-        let frame = centeredFrame(width: width)
-        setFrame(NSRect(x: frame.minX, y: frame.minY - 14, width: width, height: capsuleHeight), display: false)
+        let height = OverlayMetrics.capsuleHeight(for: text)
+        layoutLabel(for: width)
+        let frame = centeredFrame(width: width, height: height)
+        setFrame(NSRect(x: frame.minX, y: frame.minY - 14, width: width, height: height), display: false)
         alphaValue = 0
         orderFrontRegardless()
         startDisplayTimer()
@@ -56,14 +66,25 @@ final class RecordingOverlayPanel: NSPanel {
         guard isShowing else { return }
         label.stringValue = text
 
-        // Elastic width transition
+        // Elastic width/height transition: a long sentence wraps and the
+        // capsule grows vertically instead of truncating.
         let width = OverlayMetrics.capsuleWidth(for: text)
-        let frame = centeredFrame(width: width)
+        let height = OverlayMetrics.capsuleHeight(for: text)
+        layoutLabel(for: width)
+        let frame = centeredFrame(width: width, height: height)
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.25
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             animator().setFrame(frame, display: true)
         }
+    }
+
+    /// Freezes the seconds counter (recording ended; the capsule may still be
+    /// showing "transcribing…").
+    func stopRecordingTimer() {
+        guard isTimerRunning else { return }
+        isTimerRunning = false
+        refreshTimerLabel()
     }
 
     /// Raw audio level in 0...1 — smoothed by the animator at display rate.
@@ -75,6 +96,8 @@ final class RecordingOverlayPanel: NSPanel {
     func dismiss() {
         guard isShowing else { return }
         isShowing = false
+        isTimerRunning = false
+        startedAt = nil
         stopDisplayTimer()
 
         NSAnimationContext.runAnimationGroup { context in
@@ -156,28 +179,67 @@ final class RecordingOverlayPanel: NSPanel {
 
         label.font = .systemFont(ofSize: 15, weight: .medium)
         label.textColor = NSColor.white.withAlphaComponent(0.92)
-        label.lineBreakMode = .byTruncatingTail
-        label.maximumNumberOfLines = 1
+        label.lineBreakMode = .byWordWrapping
+        label.maximumNumberOfLines = OverlayMetrics.maxLines
+        label.usesSingleLineMode = false
+        label.cell?.wraps = true
+        label.cell?.isScrollable = false
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        label.setContentHuggingPriority(.defaultLow, for: .horizontal)
         stack.addArrangedSubview(label)
+
+        // Elapsed seconds (kept at the trailing edge, fixed width so the
+        // capsule doesn't jitter as digits change).
+        timerLabel.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+        timerLabel.textColor = NSColor.white.withAlphaComponent(0.6)
+        timerLabel.alignment = .right
+        timerLabel.setContentHuggingPriority(.required, for: .horizontal)
+        timerLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        stack.addArrangedSubview(timerLabel)
 
         NSLayoutConstraint.activate([
             waveformView.widthAnchor.constraint(equalToConstant: waveSize),
             waveformView.heightAnchor.constraint(equalToConstant: 32),
+            timerLabel.widthAnchor.constraint(equalToConstant: timerWidth),
             stack.leadingAnchor.constraint(equalTo: effect.leadingAnchor, constant: hPadding),
             stack.trailingAnchor.constraint(equalTo: effect.trailingAnchor, constant: -hPadding),
             stack.centerYAnchor.constraint(equalTo: effect.centerYAnchor),
         ])
     }
 
-    private func centeredFrame(width: CGFloat) -> NSRect {
+    /// Gives the multi-line label a wrap width that matches the capsule's
+    /// text area (AppKit needs this to compute a wrapped intrinsic height).
+    private func layoutLabel(for width: CGFloat) {
+        label.preferredMaxLayoutWidth = max(width - OverlayMetrics.internalPadding, 40)
+    }
+
+    private func centeredFrame(width: CGFloat, height: CGFloat) -> NSRect {
         guard let screen = NSScreen.main else {
-            return NSRect(x: 0, y: 100, width: width, height: capsuleHeight)
+            return NSRect(x: 0, y: 100, width: width, height: height)
         }
         let visible = screen.visibleFrame
         let x = visible.midX - width / 2
         let y = visible.minY + 56
-        return NSRect(x: x, y: y, width: width, height: capsuleHeight)
+        return NSRect(x: x, y: y, width: width, height: height)
+    }
+
+    // MARK: - Seconds counter
+
+    private func startRecordingTimer() {
+        startedAt = Date()
+        elapsedSeconds = 0
+        isTimerRunning = true
+        timerLabel.stringValue = OverlayMetrics.elapsedLabel(seconds: 0)
+    }
+
+    private func refreshTimerLabel() {
+        guard let startedAt else { return }
+        let seconds = isTimerRunning ? Int(Date().timeIntervalSince(startedAt)) : elapsedSeconds
+        elapsedSeconds = seconds
+        let text = OverlayMetrics.elapsedLabel(seconds: seconds)
+        if timerLabel.stringValue != text {
+            timerLabel.stringValue = text
+        }
     }
 
     private func startDisplayTimer() {
@@ -195,6 +257,8 @@ final class RecordingOverlayPanel: NSPanel {
     }
 
     private func tick() {
+        refreshTimerLabel()
+
         let level = pendingLevel
         pendingLevel = 0
         let random = Float.random(in: 0...1)

@@ -308,6 +308,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func stopRecording() {
         statusBarController?.updateState(.processing)
         logger.info("Recording stopped")
+        // Freeze the overlay's elapsed-seconds counter: what follows is
+        // transcription/polish time, not speaking time.
+        recordingOverlay.stopRecordingTimer()
 
         // Captured now: any result produced from here on is only allowed to be
         // injected while this is still the newest dictation.
