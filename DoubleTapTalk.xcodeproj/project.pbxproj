@@ -12,6 +12,7 @@
 		2B2A4C93C4AF5818C8127D29 /* RecordingOverlayPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E68E9CAF1D9A8D32BB80AA32 /* RecordingOverlayPanel.swift */; };
 		3D8A990FB0C645484F9F5770 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8243353DE18977850AC6BDBB /* SettingsView.swift */; };
 		3E0E26DB6DBEB9E2CBBCEDE9 /* StatusBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 614C2A53F6BE423DAEE8E7CA /* StatusBarController.swift */; };
+		4995D766BB26399048F507F7 /* SpeechSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B28A9EEF92158D9A05F1ED87 /* SpeechSupport.swift */; };
 		4D18019C00F53EA80C8D3C0E /* SettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1F8906590DA4E7A4F022941 /* SettingsWindowController.swift */; };
 		6EF7C6837B2AE12C791EB6ED /* OverlayMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = C232BBF96AB595320BBBCA43 /* OverlayMetrics.swift */; };
 		704554D1F535E1109D32B3DA /* RecordingFileWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11BBD14466F5C91817D48534 /* RecordingFileWriter.swift */; };
@@ -30,12 +31,10 @@
 		CE53A33A2E79BB0E4FE34630 /* CloudTranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C39F972B02531CE2DA58401 /* CloudTranscriptionService.swift */; };
 		E49AF2D7A3F80828462E54C1 /* OverlaySession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4452828AC2D567127D5791CD /* OverlaySession.swift */; };
 		E88C95A0C23F5D6F2E0E2D50 /* PolishModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8201174E2DBE014AE074582 /* PolishModels.swift */; };
-		F71BEF73A18538F542FDA765 /* AppleSpeechBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CE750A52CB76E69F7C1A85E /* AppleSpeechBackend.swift */; };
 		F94AFC359096B7512D596A46 /* DoubleTapTalkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B92E1182E5EDD3E9294A736 /* DoubleTapTalkApp.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		0CE750A52CB76E69F7C1A85E /* AppleSpeechBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSpeechBackend.swift; sourceTree = "<group>"; };
 		11BBD14466F5C91817D48534 /* RecordingFileWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingFileWriter.swift; sourceTree = "<group>"; };
 		1A8F33F795AE6DF93EA56FF9 /* MicrophonePermissionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophonePermissionService.swift; sourceTree = "<group>"; };
 		1C39F972B02531CE2DA58401 /* CloudTranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudTranscriptionService.swift; sourceTree = "<group>"; };
@@ -55,6 +54,7 @@
 		9B92E1182E5EDD3E9294A736 /* DoubleTapTalkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoubleTapTalkApp.swift; sourceTree = "<group>"; };
 		A41F0C0AB39501E3C01C0282 /* PolishProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolishProcessor.swift; sourceTree = "<group>"; };
 		A8201174E2DBE014AE074582 /* PolishModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolishModels.swift; sourceTree = "<group>"; };
+		B28A9EEF92158D9A05F1ED87 /* SpeechSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechSupport.swift; sourceTree = "<group>"; };
 		BDC0C224A4AB840702A4820F /* ContinuousDictationSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinuousDictationSession.swift; sourceTree = "<group>"; };
 		C1F8906590DA4E7A4F022941 /* SettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowController.swift; sourceTree = "<group>"; };
 		C232BBF96AB595320BBBCA43 /* OverlayMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayMetrics.swift; sourceTree = "<group>"; };
@@ -144,8 +144,8 @@
 		CCBC426A7B73DD7154505A3E /* Backends */ = {
 			isa = PBXGroup;
 			children = (
-				0CE750A52CB76E69F7C1A85E /* AppleSpeechBackend.swift */,
 				BDC0C224A4AB840702A4820F /* ContinuousDictationSession.swift */,
+				B28A9EEF92158D9A05F1ED87 /* SpeechSupport.swift */,
 			);
 			path = Backends;
 			sourceTree = "<group>";
@@ -221,7 +221,6 @@
 			files = (
 				A42B132BA46F40B14C25E2CB /* ASRSettings.swift in Sources */,
 				27133A3971807B2E0C783FB8 /* AccessibilityService.swift in Sources */,
-				F71BEF73A18538F542FDA765 /* AppleSpeechBackend.swift in Sources */,
 				CE53A33A2E79BB0E4FE34630 /* CloudTranscriptionService.swift in Sources */,
 				9A75BB952EC3200542642548 /* ContinuousDictationSession.swift in Sources */,
 				F94AFC359096B7512D596A46 /* DoubleTapTalkApp.swift in Sources */,
@@ -241,6 +240,7 @@
 				CB70F4C9CAFF36529C7E6487 /* Settings.swift in Sources */,
 				3D8A990FB0C645484F9F5770 /* SettingsView.swift in Sources */,
 				4D18019C00F53EA80C8D3C0E /* SettingsWindowController.swift in Sources */,
+				4995D766BB26399048F507F7 /* SpeechSupport.swift in Sources */,
 				3E0E26DB6DBEB9E2CBBCEDE9 /* StatusBarController.swift in Sources */,
 				AB82F2F5C9E4A77A69C04A15 /* TextInjectionService.swift in Sources */,
 				885506C747E7348F10D39A1B /* WaveformView.swift in Sources */,

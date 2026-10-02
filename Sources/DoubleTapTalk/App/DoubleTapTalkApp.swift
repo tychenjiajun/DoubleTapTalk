@@ -288,6 +288,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// session, or a stray Backspace) is filtered out here.
     private func stopRelayViaBackspace() {
         guard let session = relaySession else { return }
+        // The Control-tap stop path clears HotkeyService's recording state;
+        // this non-Control path must too, or the next Control tap is read as
+        // "stopping a recording" that no longer exists.
+        hotkeyService?.clearRecording()
         relaySession = nil
         relayIsFinalizing = true
         statusBarController?.markRelayFinalizing()

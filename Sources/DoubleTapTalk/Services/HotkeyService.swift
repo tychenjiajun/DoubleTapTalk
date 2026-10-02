@@ -86,6 +86,16 @@ final class HotkeyService {
         }
     }
 
+    /// Clears the "recording in progress" state WITHOUT firing any callback —
+    /// for stop paths that bypass the Control tap (Backspace stop). Without
+    /// this, the next Control tap would still be read as "stopping a recording"
+    /// that no longer exists.
+    func clearRecording() {
+        isRecording = false
+        lastTapTime = nil
+        logger.info("Recording state cleared (non-Control stop path)")
+    }
+
     func stop() {
         logger.info("Stopping hotkey service...")
         // Stop health check
