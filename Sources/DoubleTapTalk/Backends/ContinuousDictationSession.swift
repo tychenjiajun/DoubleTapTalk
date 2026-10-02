@@ -96,7 +96,7 @@ struct RelaySegmentCloseGate {
 }
 
 /// Converts arbitrary tap buffers to Float32 16 kHz mono — the format
-/// SFSpeechRecognizer needs on macOS. Mirrors AppleSpeechBackend's converter.
+/// SFSpeechRecognizer needs on macOS.
 private struct Mono16kConverter {
     private let converter: AVAudioConverter
     let targetFormat: AVAudioFormat

@@ -18,7 +18,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusBarController: StatusBarController?
     private var hotkeyService: HotkeyService?
     private var textInjectionService: TextInjectionService?
-    private var appleSpeechBackend: AppleSpeechBackend?
     /// Continuous relay dictation session (nil when relay mode is off).
     private var relaySession: ContinuousDictationSession?
     /// True from the moment the stop tap lands until the last segment is in —
@@ -181,15 +180,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 return
             }
-            
-            // Proceed with recording — Apple streaming is the only backend.
-            // Continuous (relay) mode keeps the mic open across segments when enabled.
+            // Proceed with recording — the relay (continuous) engine is the one
+            // and only mode: microphone stays open, segments rotate on idle.
             do {
-                if DoubleTapTalkSettings.shared.relayEnabled {
-                    try await startRelayStreaming(generation: generation)
-                } else {
-                    try await startAppleStreaming()
-                }
+                try await startRelayStreaming(generation: generation)
             } catch {
                 await MainActor.run {
                     logger.info("Failed to start recording: \(error)")
@@ -197,51 +191,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     statusBarController?.updateState(.error)
                 }
             }
-        }
-    }
-    
-    /// Starts on-device streaming recognition (Apple). Shows the overlay and
-    /// streams live partial text + audio levels into it.
-    private func startAppleStreaming() async throws {
-        logger.info("Starting Apple streaming recognition...")
-        
-        guard await AppleSpeechBackend.requestPermission() else {
-            await MainActor.run {
-                logger.error("Speech recognition permission denied")
-                self.showSpeechPermissionDeniedAlert()
-                statusBarController?.updateState(.idle)
-            }
-            return
-        }
-        
-        await MainActor.run {
-            recordingOverlay.show()
-        }
-        
-        let backend = AppleSpeechBackend()
-        backend.onPartialText = { [weak self] text in
-            Task { @MainActor in self?.recordingOverlay.updateLiveText(text) }
-        }
-        backend.onAudioLevel = { [weak self] level in
-            Task { @MainActor in self?.recordingOverlay.setAudioLevel(level) }
-        }
-        backend.onError = { message in
-            FileLogger.shared.error("Apple recognition error: \(message)")
-        }
-        
-        // Resolve on the main thread (TIS requires it) — when language is "auto",
-        // the active input method decides: Chinese IME → zh-CN, English → en-US.
-        let inputMethodLang = await MainActor.run {
-            InputMethodLanguage.currentLanguageCode()
-        }
-        logger.info("Input method language: \(inputMethodLang ?? "unknown")")
-        
-        try backend.start(language: DoubleTapTalkSettings.shared.language, inputMethodLanguage: inputMethodLang)
-        appleSpeechBackend = backend
-        
-        await MainActor.run {
-            statusBarController?.updateState(.recording)
-            logger.info("Apple streaming recognition started")
         }
     }
     
@@ -285,7 +234,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func startRelayStreaming(generation: Int) async throws {
         logger.info("Starting continuous relay dictation...")
 
-        guard await AppleSpeechBackend.requestPermission() else {
+        guard await SpeechPermission.request() else {
             await MainActor.run {
                 logger.error("Speech recognition permission denied")
                 self.showSpeechPermissionDeniedAlert()
@@ -381,68 +330,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // injected while this is still the newest dictation.
         let generation = generationSnapshot()
 
-        // Relay mode: finalize the whole session; already-rotated segments are
-        // inserted in order before the final segment is refined + injected.
-        if let session = relaySession {
-            relaySession = nil
-            relayIsFinalizing = true
-            statusBarController?.markRelayFinalizing()
-            Task {
-                // stop() delivers all rotated segments (in order) before it
-                // returns, so enqueuing the final one here lands it last.
-                let result = await session.stop()
-                self.enqueueRelaySegment(result, final: true, generation: generation)
-            }
-            return
-        }
-
-        guard let backend = appleSpeechBackend else {
+        // The relay engine is the one and only mode: stop() finalizes the
+        // whole session; already-rotated segments are inserted in order before
+        // the final segment is refined + injected.
+        guard let session = relaySession else {
+            // A stray stop tap with no live session: nothing to finalize.
+            logger.info("Stop tap with no live relay session — ignored")
             statusBarController?.updateState(.idle)
             return
         }
-        appleSpeechBackend = nil
-        
+        relaySession = nil
+        relayIsFinalizing = true
+        statusBarController?.markRelayFinalizing()
         Task {
-            let appleText = await backend.stop()
-            let recordingURL = backend.recordingFileURL
-
-            // Cloud transcription (OpenAI-compatible ASR) of the recorded audio
-            // replaces the final text; Apple's result is the fallback. Skip
-            // upload when Apple recognized no words — no blank audio to ASR.
-            let asr = ASRSettings.current()
-            var rawText = appleText
-            let hasWords = !appleText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-
-            if asr.enabled, hasWords {
-                if let recordingURL = recordingURL {
-                    await MainActor.run {
-                        guard self.isCurrentGeneration(generation) else { return }
-                        self.recordingOverlay.showTranscribing()
-                    }
-                    if let cloudText = await CloudTranscriptionService.shared.transcribe(fileURL: recordingURL, settings: asr) {
-                        logger.info("Using cloud transcription (Apple result kept as fallback)")
-                        rawText = cloudText
-                    } else {
-                        logger.info("Cloud transcription unavailable — falling back to Apple result")
-                    }
-                } else {
-                    logger.warning("No recording file available — using Apple result")
-                    await MainActor.run {
-                        guard self.isCurrentGeneration(generation) else { return }
-                        self.recordingOverlay.showPolishing()
-                    }
-                }
-            } else {
-                if asr.enabled {
-                    logger.info("No words recognized by Apple — skipping cloud upload")
-                }
-                await MainActor.run {
-                    guard self.isCurrentGeneration(generation) else { return }
-                    self.recordingOverlay.showPolishing()
-                }
-            }
-
-            await finalize(rawText: rawText, generation: generation)
+            // stop() delivers all rotated segments (in order) before it
+            // returns, so enqueuing the final one here lands it last.
+            let result = await session.stop()
+            self.enqueueRelaySegment(result, final: true, generation: generation)
         }
     }
 

@@ -14,8 +14,8 @@ let package = Package(
             path: "Sources/DoubleTapTalk",
             sources: [
                 "App/DoubleTapTalkApp.swift",
-                "Backends/AppleSpeechBackend.swift",
                 "Backends/ContinuousDictationSession.swift",
+                "Backends/SpeechSupport.swift",
                 "Models/ASRSettings.swift",
                 "Models/LLMProvider.swift",
                 "Models/PipelineError.swift",
