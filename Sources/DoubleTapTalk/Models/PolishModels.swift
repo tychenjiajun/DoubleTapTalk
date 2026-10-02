@@ -463,18 +463,24 @@ private func buildHistoryHint(_ segments: [String]) -> String {
     return "\n\nEarlier dictation (same session) — keep terminology and style consistent, do NOT repeat any of it:\n\(lines)"
 }
 
-/// Build context hint from existing text, conversation hint and previous segments
+/// Build context hint from existing text, conversation hint and previous segments.
+///
+/// Deliberately NOT fenced with ``` and explicitly labelled as context: measured
+/// on liquid/lfm-2.5-2.6b:free, fenced context made the model return the field's
+/// existing text instead of the new utterance (1 in 5 samples); these labels
+/// fixed it (5/5). See Tests/VoiceKeyTests/RefinementPromptEvalTests.swift.
 private func buildContextHint(existingText: String?, conversationHint: String?, previousSegments: [String]) -> String {
     let base: String
     switch (existingText, conversationHint) {
     case (let text?, _) where !(text.isEmpty):
+        let label = "Already typed in the field (context only — your output must contain ONLY the new utterance):"
         if let hint = conversationHint, !hint.isEmpty {
-            base = "\n\nExisting text (last 200 chars):\n```\n\(String(text.suffix(200)))\n```\n\nRecent context:\n```\n\(hint)\n```"
+            base = "\n\n\(label)\n\(String(text.suffix(200)))\n\nRecent screen content (context only — never repeat it):\n\(hint)"
         } else {
-            base = "\n\nExisting text (last 200 chars):\n```\n\(String(text.suffix(200)))\n```"
+            base = "\n\n\(label)\n\(String(text.suffix(200)))"
         }
     case (_, let hint?) where !(hint.isEmpty):
-        base = "\n\nRecent context:\n```\n\(hint)\n```"
+        base = "\n\nRecent screen content (context only — never repeat it):\n\(hint)"
     default:
         base = ""
     }
@@ -560,7 +566,7 @@ extension PolishProfile {
         case .chatMessaging:
             return buildPrompt(
                 role: "You are polishing speech-to-text for a chat message (Slack, Discord, WhatsApp).",
-                rule: "Chat: conversational and natural; light punctuation; remove filler words (um, uh); keep tone, humor, sarcasm, emojis.",
+                rule: "Chat: conversational and natural; light punctuation; remove filler words (um, uh); NEVER delete casual slang or expressions (lol, haha, omg, btw) — keep tone, humor, sarcasm, emojis.",
                 contextHint: contextHint
             )
             
@@ -581,7 +587,7 @@ extension PolishProfile {
         case .general:
             return buildPrompt(
                 role: "You are polishing speech-to-text into clean readable text.",
-                rule: "General: fix grammar and punctuation; remove filler words (um, uh, like); preserve intent and voice; keep names, places, numbers, terms exact.",
+                rule: "General: fix grammar and punctuation; strip filler words (um, uh, like, you know, I mean) wherever they appear; preserve intent and voice; keep names, places, numbers, terms exact.",
                 contextHint: contextHint
             )
         }

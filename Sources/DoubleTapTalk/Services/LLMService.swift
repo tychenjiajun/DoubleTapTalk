@@ -144,8 +144,16 @@ final class LLMService {
         return response
     }
     
+    /// Wraps the ASR text for the user turn.
+    ///
+    /// The trailing script reminder is load-bearing, not decoration: measured on
+    /// liquid/lfm-2.5-2.6b:free, a Chinese dictation was translated into English
+    /// in 3/6 samples with the system guard alone, and 0/6 with the reminder in
+    /// the user turn. Small models weight the nearest instruction far more than
+    /// the system prompt, so the language rule is repeated here (the single
+    /// injection site — see Tests/VoiceKeyTests/RefinementPromptEvalTests.swift).
     private func wrapUserContent(_ text: String) -> String {
-        return "Speech to polish: \(text)"
+        "Speech to polish: \(text)\n(keep the same language and script as the input)"
     }
     
     private func callLLM(

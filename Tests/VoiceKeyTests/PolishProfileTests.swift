@@ -222,6 +222,7 @@ final class PolishProfileTests: XCTestCase {
         XCTAssertTrue(prompt.contains("conversational"), "Chat prompt should mention conversational tone")
         XCTAssertTrue(prompt.contains("conversational and natural"), "Should keep messages natural")
         XCTAssertTrue(prompt.contains("emojis"), "Should preserve emojis")
+        XCTAssertTrue(prompt.contains("NEVER delete casual slang"), "Casual slang must be protected (live eval: lfm-2.5-2.6b dropped it)")
     }
     
     func testEmailFormalSystemPrompt() {
@@ -260,6 +261,7 @@ final class PolishProfileTests: XCTestCase {
         
         XCTAssertTrue(prompt.contains("grammar"), "General prompt should mention grammar")
         XCTAssertTrue(prompt.contains("filler words"), "Should mention removing filler words")
+        XCTAssertTrue(prompt.contains("wherever they appear"), "Fillers must be removed mid-sentence too")
         XCTAssertTrue(prompt.contains("intent"), "Should preserve speaker intent")
     }
     
@@ -296,6 +298,41 @@ final class PolishProfileTests: XCTestCase {
         let context = createPolishContext(profile: .terminal)
         let prompt = PolishProfile.terminal.systemPrompt(context: context)
         XCTAssertFalse(prompt.contains("Earlier dictation"), "No history section when there are no previous segments")
+    }
+
+    // MARK: - On-Screen Context Tests
+
+    /// Regression guards for the live eval (`RefinementPromptEvalTests`): the
+    /// field's existing text must be labelled as context, and must NOT be fenced
+    /// — a fenced block made liquid/lfm-2.5-2.6b:free answer with the field's
+    /// text instead of the new utterance (1 in 5 samples).
+    func testExistingTextHintIsLabelledAsContextAndUnfenced() {
+        let context = PolishContext(
+            targetApp: createMockContext(),
+            existingText: "今天我们讨论了",
+            conversationHint: nil,
+            userLocale: "zh_CN"
+        )
+        let prompt = PolishProfile.chatMessaging.systemPrompt(context: context)
+
+        XCTAssertTrue(prompt.contains("今天我们讨论了"), "Existing text must still be passed as context")
+        XCTAssertTrue(prompt.contains("context only"), "Existing text must be labelled as context")
+        XCTAssertTrue(prompt.contains("ONLY the new utterance"), "Must tell the model to output only the new utterance")
+        XCTAssertFalse(prompt.contains("```"), "Context must not be fenced: fences read as 'this is the output'")
+    }
+
+    func testConversationHintIsLabelledAsContext() {
+        let context = PolishContext(
+            targetApp: createMockContext(appName: "Terminal", bundleID: "com.apple.Terminal", isTerminal: true),
+            existingText: nil,
+            conversationHint: "➜  project git:(main) ✗ ",
+            userLocale: "en_US"
+        )
+        let prompt = PolishProfile.terminal.systemPrompt(context: context)
+
+        XCTAssertTrue(prompt.contains("➜  project"), "Screen context must be passed through")
+        XCTAssertTrue(prompt.contains("never repeat it"), "Screen context must be marked as never-repeat")
+        XCTAssertFalse(prompt.contains("```"), "Screen context must not be fenced")
     }
 
     // MARK: - Bundle ID Mappings Tests

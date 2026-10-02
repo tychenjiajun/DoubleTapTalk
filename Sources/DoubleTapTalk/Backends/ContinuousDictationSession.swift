@@ -32,6 +32,39 @@ struct RelaySegmentActivity {
     }
 }
 
+/// Tracks whether WE asked the recognizer to stop, so the late callback can be
+/// told apart from a genuine failure (pure, testable).
+///
+/// Why this exists: when a segment rotates we call `task.finish()` +
+/// `request.endAudio()`. Apple does NOT answer with a final result — it replies
+/// with a cancellation error (`kAFAssistantErrorDomain` 209). The old code
+/// ignored that callback, so `hasFinal` never flipped and every single rotation
+/// burned the full finalize timeout: a configured 2s pause was delivered as
+/// ~4s. Once closing, the first callback (final result *or* error) is the last
+/// one this segment will ever get, so the wait may end there.
+struct RelaySegmentCloseGate {
+    private(set) var isClosing = false
+    private(set) var isSettled = false
+
+    /// Call before cancelling the recognition task.
+    mutating func beginClosing() {
+        isClosing = true
+    }
+
+    /// Classifies a recognition callback. `failed` is true for an error
+    /// callback (including our own cancellation).
+    mutating func handleCallback(hasFinalResult: Bool, failed: Bool) {
+        guard isClosing, !isSettled else { return }
+        if hasFinalResult || failed {
+            isSettled = true
+        }
+    }
+
+    /// True once closing and the last callback has landed — the bounded
+    /// finalize wait may return immediately.
+    var canEndWait: Bool { isClosing && isSettled }
+}
+
 /// Converts arbitrary tap buffers to Float32 16 kHz mono — the format
 /// SFSpeechRecognizer needs on macOS. Mirrors AppleSpeechBackend's converter.
 private struct Mono16kConverter {
@@ -129,6 +162,8 @@ final class ContinuousDictationSession {
 
         private let activityLock = NSLock()
         private var activity = RelaySegmentActivity()
+        private let gateLock = NSLock()
+        private var closeGate = RelaySegmentCloseGate()
 
         init(recognizer: SFSpeechRecognizer, request: SFSpeechAudioBufferRecognitionRequest, recorder: RecordingFileWriter?) {
             self.recognizer = recognizer
@@ -157,8 +192,40 @@ final class ContinuousDictationSession {
             return transcript.hasFinal
         }
 
+        /// Marks the segment as closing BEFORE the recognizer task is
+        /// cancelled, so the cancellation callback can end the finalize wait.
+        func beginClosing() {
+            gateLock.lock(); defer { gateLock.unlock() }
+            closeGate.beginClosing()
+        }
+
+        /// Commits the best transcript as final and returns true when the
+        /// bounded wait may end right now.
+        @discardableResult
+        private func settleIfClosing(hasFinalResult: Bool, failed: Bool) -> Bool {
+            gateLock.lock()
+            closeGate.handleCallback(hasFinalResult: hasFinalResult, failed: failed)
+            let settled = closeGate.canEndWait
+            let closing = closeGate.isClosing
+            gateLock.unlock()
+
+            guard settled else { return false }
+            if !hasFinalResult {
+                // Cancellation (or a terminal error) instead of a final result:
+                // keep whatever partial text we already have as the result.
+                transcriptLock.lock()
+                if !transcript.hasFinal {
+                    transcript.apply(transcript: transcript.currentText, isFinal: true)
+                }
+                transcriptLock.unlock()
+            }
+            return closing
+        }
+
         /// Waits (bounded) for Apple to commit the final result instead of
-        /// blindly sleeping a fixed interval.
+        /// blindly sleeping a fixed interval. Ends as soon as the segment's last
+        /// callback lands (see `RelaySegmentCloseGate`) — the timeout is only a
+        /// safety net for a callback that never arrives.
         func waitForFinalResult(timeout: TimeInterval) async {
             let deadline = Date().addingTimeInterval(timeout)
             while !hasFinal, Date() < deadline {
@@ -169,6 +236,12 @@ final class ContinuousDictationSession {
         func handleRecognition(result: SFSpeechRecognitionResult?, error: Error?, session: ContinuousDictationSession) {
             if let error = error {
                 let ns = error as NSError
+                // Our own finish()/endAudio(): settle quietly, keep the best
+                // transcript and do NOT report a user-visible failure.
+                if settleIfClosing(hasFinalResult: false, failed: true) {
+                    logger.debug("Relay segment closed (domain=\(ns.domain) code=\(ns.code)) — using best transcript")
+                    return
+                }
                 logger.warning("Relay recognition error: \(error.localizedDescription) (domain=\(ns.domain) code=\(ns.code))")
                 if result == nil {
                     session.onError?(error.localizedDescription)
@@ -183,6 +256,7 @@ final class ContinuousDictationSession {
             let best = transcript.currentText
             transcriptLock.unlock()
             observeBestText(best)
+            settleIfClosing(hasFinalResult: isFinal, failed: false)
             if isFinal {
                 session.onFinalText?(text)
             } else {
@@ -381,10 +455,11 @@ final class ContinuousDictationSession {
     /// The engine keeps running — the tap feeds the (already swapped-in) new
     /// segment while Apple finishes the old one.
     private func finalizeSegment(_ segment: Segment) async -> SegmentTranscript {
+        // Closing FIRST is what makes the wait short: our own cancellation
+        // arrives as an error callback, not a final result.
+        segment.beginClosing()
         segment.task?.finish()
         segment.request.endAudio()
-        // Wait (bounded) for the committed final result — the recognizer needs
-        // a beat after endAudio, but a fixed sleep is both slow and flaky.
         await segment.waitForFinalResult(timeout: 1.5)
         segment.task = nil
 

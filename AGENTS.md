@@ -14,6 +14,7 @@
 | Install + re-sign | `./install.sh`, then `codesign --force --deep --sign - /Applications/DoubleTapTalk.app` |
 | Live logs | `./view-logs.sh watch` |
 | Check polish pipeline | `./check-polish-logs.sh` |
+| Live prompt evals (needs key, hits OpenRouter) | `OPENROUTER_API_KEY=sk-or-... swift test --filter RefinementPromptEvalTests` |
 | Test text injection | `./test-injection.sh browser` (or `native`) |
 
 ## Adding or Renaming Files
@@ -23,6 +24,8 @@
 
 ## Key Conventions
 - Polish prompts live in `Sources/DoubleTapTalk/Models/PolishModels.swift`; shared sections `baseInstruction` + `languagePreservationSection` are reused by every profile via `buildPrompt(role:rule:contextHint:)`.
+- Two prompt levers are load-bearing and must not be "cleaned up": the script reminder in `LLMService.wrapUserContent` (user turn — the system-prompt guard alone lost Chinese 3/6 on `liquid/lfm-2.5-2.6b:free`) and the unfenced, `context only` labelling of the existing-text / screen-context hints (fenced context made the model answer with the field's text instead of the new utterance). Rationale + measurements: `docs/PROMPT_FIXES.md`.
+- `Tests/VoiceKeyTests/RefinementPromptEvalTests.swift` runs every profile prompt against the real model; it skips unless `OPENROUTER_API_KEY` is set. Change a profile rule and re-run it before shipping.
 - Keep profile prompts compact (≤620 chars, enforced by `PromptEconomyTests`). When rewording prompts, update the content assertions in `Tests/VoiceKeyTests/PolishProfileTests.swift`.
 - Speech recognition streams live text via Apple's Speech framework (`Backends/AppleSpeechBackend.swift`); do **not** set `requiresOnDeviceRecognition` — when macOS Dictation is disabled, forcing on-device makes recognition fail with `kLSRErrorDomain code=201` (no text at all). Continuous "relay" dictation lives in `Backends/ContinuousDictationSession.swift` (idle-based segment rotation, ordered emission via `Services/OrderedTaskChain.swift`). Cloud ASR (`Services/CloudTranscriptionService.swift`) is optional, post-hoc, and must always fall back to the Apple result. WAV recordings (`Services/RecordingFileWriter.swift`) are only written when Cloud Transcription is enabled; writes never block the audio tap, recordings are pruned to the newest 20, and `RecordingStore` powers the Settings panel (usage / open folder / delete all).
 - Relay results carry a dictation-generation id: work whose session already ended is dropped, never injected late or appended to the next session's history (`AppDelegate.enqueueRelaySegment`/`finalize`).

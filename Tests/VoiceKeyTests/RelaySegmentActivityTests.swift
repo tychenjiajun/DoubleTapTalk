@@ -69,3 +69,63 @@ final class RelaySegmentActivityTests: XCTestCase {
         XCTAssertFalse(activity.observe(text: "ab"))
     }
 }
+
+/// The rotation finalize gate: when a segment rotates, Apple answers our own
+/// `finish()`/`endAudio()` with a cancellation error (kAFAssistantErrorDomain
+/// 209) instead of a final result. These tests pin that this callback ends the
+/// bounded wait immediately — that bug added ~1.5s to EVERY rotated segment,
+/// turning a configured 2s pause into ~4s of perceived latency.
+final class RelaySegmentCloseGateTests: XCTestCase {
+
+    func testWaitNeverEndsBeforeClosing() {
+        var gate = RelaySegmentCloseGate()
+        XCTAssertFalse(gate.isClosing)
+        // Streaming partials before we cancel must not settle anything.
+        gate.handleCallback(hasFinalResult: false, failed: false)
+        XCTAssertFalse(gate.canEndWait)
+    }
+
+    func testOurCancellationEndsTheWaitImmediately() {
+        var gate = RelaySegmentCloseGate()
+        gate.beginClosing()
+        XCTAssertTrue(gate.isClosing)
+        // Error callback (209/203) instead of a final result — the common case.
+        gate.handleCallback(hasFinalResult: false, failed: true)
+        XCTAssertTrue(gate.canEndWait, "Our own cancellation must end the finalize wait, not burn the timeout")
+    }
+
+    func testFinalResultAfterClosingEndsTheWait() {
+        var gate = RelaySegmentCloseGate()
+        gate.beginClosing()
+        gate.handleCallback(hasFinalResult: true, failed: false)
+        XCTAssertTrue(gate.canEndWait)
+    }
+
+    func testSpontaneousFailureBeforeClosingDoesNotSettle() {
+        var gate = RelaySegmentCloseGate()
+        // A real recognition error while still streaming must NOT be mistaken
+        // for our own cancellation — the session stays open.
+        gate.handleCallback(hasFinalResult: false, failed: true)
+        XCTAssertFalse(gate.canEndWait, "Only a close we initiated may end the wait")
+        XCTAssertFalse(gate.isClosing)
+    }
+
+    func testSettlesOnceAndStaysSettled() {
+        var gate = RelaySegmentCloseGate()
+        gate.beginClosing()
+        gate.handleCallback(hasFinalResult: false, failed: true)
+        // Late callbacks after settling are ignored, never re-armed.
+        gate.handleCallback(hasFinalResult: false, failed: false)
+        XCTAssertTrue(gate.canEndWait)
+    }
+
+    func testPartialCallbackWhileClosingKeepsWaiting() {
+        var gate = RelaySegmentCloseGate()
+        gate.beginClosing()
+        // A straggling partial can still improve the text — keep waiting.
+        gate.handleCallback(hasFinalResult: false, failed: false)
+        XCTAssertFalse(gate.canEndWait)
+        gate.handleCallback(hasFinalResult: false, failed: true)
+        XCTAssertTrue(gate.canEndWait)
+    }
+}

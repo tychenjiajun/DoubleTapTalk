@@ -89,3 +89,64 @@ If polished text is significantly shorter than original without good reason, inv
 
 **Date**: 2026-04-08  
 **Impact**: Prevents LLM hallucinations from contradictory instructions
+
+---
+
+# Live Prompt Evals (liquid/lfm-2.5-2.6b:free)
+
+## Why a 2.6B model
+
+Static prompt tests (`PromptEconomyTests`, `PolishProfileTests`) can only check
+that a prompt *says* the right thing. They cannot tell you whether a model
+*obeys* it. `Tests/VoiceKeyTests/RefinementPromptEvalTests.swift` runs all eight
+refinement prompts against a real — and deliberately small — model
+(`liquid/lfm-2.5-2.6b:free` on OpenRouter, free tier) through the shipping path
+(`LLMService.polish` with a pinned profile):
+
+```bash
+OPENROUTER_API_KEY=sk-or-... swift test --filter RefinementPromptEvalTests
+```
+
+Without the key the suite skips, so `swift test` stays offline-green.
+
+The model is small on purpose: it is cheap, deterministic enough to diff, and it
+violates instructions that a 7B+ model would quietly absorb.
+
+## Findings and fixes
+
+Each finding was measured over repeated samples (the model is non-deterministic
+even at temperature 0.3) and only fixed after a candidate was re-measured.
+
+| # | Symptom (input → output) | Root cause | Fix | Before → After |
+|---|---|---|---|---|
+| 1 | `查看 日志 帮 我 看一下 昨天 的 报错` → `I'll check the logs for you.` | The anti-translation rule lives only in the *system* prompt; small models weight the nearest instruction far more | Repeat the script rule in the user turn (`LLMService.wrapUserContent`) | 3/6 → 6/6 kept Chinese |
+| 2 | `haha yeah that is totally fine lol see you tomorrow` → `Yeah, that's totally fine. See you tomorrow!` | `chatMessaging` said "keep tone, humor" but gave no explicit slang protection | Added `NEVER delete casual slang or expressions (lol, haha, omg, btw)` | slang dropped ~1 run in 5 → ~1 in 8 |
+| 3 | `um so like we should probably ship it tomorrow right` → `So like we should probably ship it tomorrow` | `general` listed `like` as a filler but not that fillers go mid-sentence | `strip filler words (…) wherever they appear` | 4/5 → 5/5 |
+| 4 | Field already contains `今天我们讨论了`, dictation `这个 方案 的 风险 有点 高` → output `今天我们讨论了` (the new words were **dropped**) | The context block was fenced with ` ``` `, which small models read as "this is the output" | Context hints are unfenced and explicitly labelled `context only — your output must contain ONLY the new utterance` | 4/5 → 5/5 |
+
+Fix #1 belongs in the user turn because a stronger *system* prompt did not help
+(`Hard rule: …` variant still lost Chinese 3/6) — the same lever fix #4 uses.
+
+## Writing the assertions
+
+Two traps, both hit while building this suite:
+
+- **Assert the rule, not one wording.** Requiring the literal `do not` from the
+  email profile failed on a perfectly good rewrite ("please ensure it is
+  completed"). The rule is "no contractions survive" — assert that.
+- **Sample, then vote.** This model is non-deterministic; a strict 3/3 on a
+  ~85%-compliant rule makes the eval flap. Behavioural rules run 3 samples and
+  require 2; hard invariants (non-empty, no fences, no preamble, CJK never
+  translated) must hold on every sample.
+
+## Rate limits
+
+The free tier allows ~20 requests/minute and OpenRouter's `lfm` route is a
+*shared* upstream pool (`limit_source: upstream_provider_shared_pool`), so
+congestion produces 429s **and** occasional low-quality samples. The harness
+spaces requests 4s apart and retries with 15s/30s/45s back-off.
+
+---
+
+**Date**: 2026-04-09  
+**Impact**: 4 prompt regressions found and fixed by a repeatable live eval
