@@ -133,11 +133,7 @@ enum SpeechLocaleMapper {
 /// SFSpeechRecognizer for it. Shared by the single-shot backend and the
 /// continuous dictation session.
 enum SpeechRecognizerFactory {
-    /// `supportsOnDevice` is Apple's verdict on whether the resolved locale has
-    /// an on-device model available — callers use it to *require* on-device
-    /// recognition so the promise that audio stays on the Mac holds whenever
-    /// Apple can honour it.
-    static func make(locale code: String?, inputMethodLanguage: String?) -> (recognizer: SFSpeechRecognizer, locale: Locale, supportsOnDevice: Bool)? {
+    static func make(locale code: String?, inputMethodLanguage: String?) -> (recognizer: SFSpeechRecognizer, locale: Locale)? {
         var locale = SpeechLocaleMapper.locale(for: code, inputMethodLanguage: inputMethodLanguage)
         var recognizer = SFSpeechRecognizer(locale: locale)
         if recognizer == nil {
@@ -152,7 +148,7 @@ enum SpeechRecognizerFactory {
             }
         }
         guard let recognizer = recognizer else { return nil }
-        return (recognizer, locale, recognizer.supportsOnDeviceRecognition)
+        return (recognizer, locale)
     }
 }
 
@@ -245,12 +241,6 @@ final class AppleSpeechBackend: NSObject, SFSpeechRecognizerDelegate {
         let recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
         recognitionRequest.shouldReportPartialResults = true
         recognitionRequest.taskHint = .dictation
-        // Keep audio on the Mac whenever Apple has an on-device model; only
-        // languages without one use Apple's servers.
-        recognitionRequest.requiresOnDeviceRecognition = pair.supportsOnDevice
-        if !pair.supportsOnDevice {
-            logger.warning("Apple has no on-device model for \(locale.identifier) — recognition will use Apple's servers")
-        }
         self.recognitionRequest = recognitionRequest
 
         recognitionTask = recognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in

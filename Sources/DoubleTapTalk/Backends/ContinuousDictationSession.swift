@@ -199,10 +199,6 @@ final class ContinuousDictationSession {
             throw PipelineError.transcriptionFailed(message)
         }
         segmentLocale = pair.locale
-        segmentSupportsOnDevice = pair.supportsOnDevice
-        if !pair.supportsOnDevice {
-            logger.warning("Apple has no on-device model for \(pair.locale.identifier) — relay recognition will use Apple's servers")
-        }
 
         let inputNode = audioEngine.inputNode
         let inputFormat = inputNode.outputFormat(forBus: 0)
@@ -241,9 +237,6 @@ final class ContinuousDictationSession {
     }
 
     private var segmentLocale: Locale?
-    /// Whether the resolved locale has an on-device model (required when it
-    /// does, so audio stays local; server fallback otherwise).
-    private var segmentSupportsOnDevice = false
     /// Set by `stop()` under `lock`; blocks further rotation so a stop can
     /// never race a segment swap (the stop would otherwise observe nil and
     /// drop the final transcript).
@@ -298,7 +291,6 @@ final class ContinuousDictationSession {
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
         request.taskHint = .dictation
-        request.requiresOnDeviceRecognition = segmentSupportsOnDevice
 
         // Record only when cloud transcription is on: the WAV exists purely to
         // be uploaded, so with ASR disabled no audio ever touches disk.

@@ -77,8 +77,10 @@ final class HotkeyService {
             CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
             logger.debug("Run loop source removed")
         }
-        // Remove tap invalidation listener
+        // Remove tap invalidation listener (so teardown can't re-enter us),
+        // then invalidate.
         if let tap = eventTap {
+            CFMachPortSetInvalidationCallBack(tap, nil)
             CFMachPortInvalidate(tap)
             logger.debug("Event tap invalidated")
         }
@@ -183,17 +185,13 @@ final class HotkeyService {
                 runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
                 CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
                 
-                // Add tap invalidation handler to detect when tap is killed by system
-                CFMachPortSetInvalidationCallBack(tap, { (tap, refcon) in
-                    guard let refcon = refcon else { return }
-                    let service = Unmanaged<HotkeyService>.fromOpaque(refcon).takeUnretainedValue()
-                    service.logger.error("Event tap was invalidated by system!")
-                    service.isTapActive = false
-                    DispatchQueue.main.async {
-                        // Attempt recovery after short delay
-                        sleep(1)
-                        service.start()
-                    }
+                // Add tap invalidation handler to detect when tap is killed by system.
+                // NOTE: CFMachPortSetInvalidationCallBack delivers no user info, so the
+                // callback's second parameter must NOT be treated as our service pointer
+                // (doing that dereferenced garbage and crashed on quit). Recovery is
+                // handled by the health-check timer.
+                CFMachPortSetInvalidationCallBack(tap, { _, _ in
+                    FileLogger.shared.error("Event tap was invalidated by the system")
                 })
                 
                 CGEvent.tapEnable(tap: tap, enable: true)

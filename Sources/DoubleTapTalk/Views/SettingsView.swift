@@ -31,7 +31,7 @@ struct SettingsView: View {
                     Text("Apple (On-Device)")
                         .fontWeight(.medium)
                 }
-                Text("Apple on-device streaming recognition (Apple's servers are used only when no on-device model exists for the language). Live text appears while you speak — no API key; audio is written to disk only when Cloud Transcription is enabled.")
+                Text("On-device streaming recognition by Apple Speech. Live text appears while you speak — no API key, audio never leaves your Mac.")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
@@ -267,7 +267,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Enable Cloud Transcription")
                             .fontWeight(.medium)
-                        Text("After recording, the audio file is sent to an OpenAI-compatible ASR endpoint (e.g. Aliyun DashScope qwen3-asr-flash) for a more accurate result. Falls back to Apple recognition on any failure.")
+                        Text("After recording, the audio file is sent to an OpenAI-compatible ASR endpoint (e.g. Aliyun DashScope qwen3-asr-flash) for a more accurate result. Falls back to Apple on-device recognition on any failure.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -335,7 +335,7 @@ struct SettingsView: View {
             } header: {
                 Text("Cloud Transcription (OpenAI-compatible ASR)")
             } footer: {
-                Text(settings.asrEnabled ? "Live text during recording stays Apple on-device (server fallback only when Apple has no on-device model for the language). The cloud result replaces the injected text only when the request succeeds." : "Optional: server-side transcription beats Apple on accuracy — requires an OpenAI-compatible ASR endpoint.")
+                Text(settings.asrEnabled ? "Live text during recording stays Apple on-device. The cloud result replaces the injected text only when the request succeeds." : "Optional: server-side transcription beats Apple on accuracy — requires an OpenAI-compatible ASR endpoint.")
                     .font(.caption)
             }
 

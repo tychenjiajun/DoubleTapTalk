@@ -52,17 +52,17 @@ DoubleTapTalk transforms how you interact with your Mac. Instead of typing, **sp
 
 #### 🛡️ On-Device Recognition (Apple)
 
-Speech recognition uses Apple's on-device engine, and the app **requires** on-device recognition whenever Apple has a model for your language (server recognition is only used for languages without one):
+Speech recognition runs entirely on your Mac using Apple's Speech framework:
 
 | Backend | Type | Best For | Accuracy | Speed |
 |---------|------|----------|----------|--------|
 | **Apple (On-Device)** | Offline ⚡ | Streaming live text, zero setup, privacy | ⭐⭐⭐⭐ | ⚡ Live |
 
 - ⚡ **Streaming**: watch your words appear live as you speak
-- 🔒 **Private**: live text stays on your Mac; WAV recordings are only written when Cloud Transcription is enabled — stored locally (`~/Library/Application Support/DoubleTapTalk/Recordings/`, last 20 kept) and uploaded only for transcription. Settings shows how much space they use and lets you open the folder or delete them all.
+- 🔒 **Private**: live text is always Apple on-device; WAV recordings are only written when Cloud Transcription is enabled — stored locally (`~/Library/Application Support/DoubleTapTalk/Recordings/`, last 20 kept) and uploaded only for transcription. Settings shows how much space they use and lets you open the folder or delete them all.
 - 🌍 **Multilingual**: auto-detect or choose zh/en/ja/ko/es/fr/de
 
-> Live text is Apple on-device recognition. Cloud transcription only replaces the final inserted text when it succeeds, and falls back to Apple otherwise — including per-segment in relay mode.
+> Live text is fixed to Apple's on-device recognition. Cloud transcription only replaces the final inserted text when it succeeds, and falls back to Apple otherwise — including per-segment in relay mode.
 
 #### ✨ AI-Powered Smart Polish
 Optional LLM-powered text enhancement that understands context:
