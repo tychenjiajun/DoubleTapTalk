@@ -40,18 +40,24 @@ final class OrderedTaskChain {
     /// the count re-check covers work appended while this is waiting.
     func drain() async {
         while true {
-            lock.lock()
-            let task = tail
-            let count = enqueuedCount
-            lock.unlock()
-
+            let (task, count) = snapshot()
             guard let task else { return }
             _ = await task.value
-
-            lock.lock()
-            let nothingNew = enqueuedCount == count
-            lock.unlock()
-            if nothingNew { return }
+            if currentEnqueuedCount == count { return }
         }
+    }
+
+    /// Sync helpers so `drain()` (async) never takes NSLock from an async
+    /// context — that is an error under strict concurrency.
+    private func snapshot() -> (task: Task<Void, Never>?, count: Int) {
+        lock.lock()
+        defer { lock.unlock() }
+        return (tail, enqueuedCount)
+    }
+
+    private var currentEnqueuedCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return enqueuedCount
     }
 }
