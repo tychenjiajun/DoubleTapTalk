@@ -18,20 +18,9 @@ final class PolishProcessorTests: XCTestCase {
         let settings = LLMSettings.default  // enabled == false
         let raw = "hello world"
 
-        let result = await processor.process(rawText: raw, settings: settings, polishEnabled: true)
+        let result = await processor.process(rawText: raw, settings: settings)
 
         XCTAssertEqual(result, raw, "Polishing disabled in settings must return text unchanged")
-    }
-
-    func testReturnsOriginalWhenPolishFlagOff() async {
-        var settings = LLMSettings.default
-        settings.enabled = true
-        settings.apiKey = "sk-test-123"
-        let raw = "hello world"
-
-        let result = await processor.process(rawText: raw, settings: settings, polishEnabled: false)
-
-        XCTAssertEqual(result, raw, "polishEnabled=false must skip LLM entirely")
     }
 
     func testReturnsOriginalWhenAPIKeyMissing() async {
@@ -40,7 +29,7 @@ final class PolishProcessorTests: XCTestCase {
         settings.apiKey = nil
         let raw = "hello world"
 
-        let result = await processor.process(rawText: raw, settings: settings, polishEnabled: true)
+        let result = await processor.process(rawText: raw, settings: settings)
 
         XCTAssertEqual(result, raw, "Missing API key must return text unchanged")
     }
@@ -51,7 +40,7 @@ final class PolishProcessorTests: XCTestCase {
         settings.apiKey = ""
         let raw = "hello world"
 
-        let result = await processor.process(rawText: raw, settings: settings, polishEnabled: true)
+        let result = await processor.process(rawText: raw, settings: settings)
 
         XCTAssertEqual(result, raw, "Empty API key must return text unchanged")
     }
@@ -61,7 +50,7 @@ final class PolishProcessorTests: XCTestCase {
         settings.enabled = true
         settings.apiKey = "sk-test-123"
 
-        let result = await processor.process(rawText: "", settings: settings, polishEnabled: true)
+        let result = await processor.process(rawText: "", settings: settings)
 
         XCTAssertEqual(result, "", "Empty input should short-circuit before any LLM call")
     }
@@ -71,7 +60,7 @@ final class PolishProcessorTests: XCTestCase {
         settings.enabled = true
         settings.apiKey = "sk-test-123"
 
-        let result = await processor.process(rawText: "   \n  ", settings: settings, polishEnabled: true)
+        let result = await processor.process(rawText: "   \n  ", settings: settings)
 
         XCTAssertEqual(result, "   \n  ", "Whitespace-only input should return unchanged")
     }

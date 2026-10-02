@@ -423,6 +423,9 @@ struct PolishContext {
     let existingText: String?
     let conversationHint: String?
     let userLocale: String  // e.g., "en", "en_US", "zh"
+    /// Earlier segments of the same dictation session (asr/refinement results),
+    /// so the model keeps terminology + style consistent and never repeats them.
+    var previousSegments: [String] = []
 }
 
 // MARK: - Shared Prompt Sections
@@ -449,19 +452,33 @@ private func buildPrompt(role: String, rule: String, contextHint: String) -> Str
     """
 }
 
-/// Build context hint from existing text and conversation hint
-private func buildContextHint(existingText: String?, conversationHint: String?) -> String {
+/// Builds a compact "earlier dictation" hint from the session's previous
+/// segments (capped: last 8 segments, 120 chars each) so prompts stay small.
+private func buildHistoryHint(_ segments: [String]) -> String {
+    let recent = segments.suffix(8)
+    guard !recent.isEmpty else { return "" }
+    let lines = recent.enumerated()
+        .map { "\($0.offset + 1)) \(String($0.element.trimmingCharacters(in: .whitespacesAndNewlines).prefix(120)))" }
+        .joined(separator: "\n")
+    return "\n\nEarlier dictation (same session) — keep terminology and style consistent, do NOT repeat any of it:\n\(lines)"
+}
+
+/// Build context hint from existing text, conversation hint and previous segments
+private func buildContextHint(existingText: String?, conversationHint: String?, previousSegments: [String]) -> String {
+    let base: String
     switch (existingText, conversationHint) {
     case (let text?, _) where !(text.isEmpty):
         if let hint = conversationHint, !hint.isEmpty {
-            return "\n\nExisting text (last 200 chars):\n```\n\(String(text.suffix(200)))\n```\n\nRecent context:\n```\n\(hint)\n```"
+            base = "\n\nExisting text (last 200 chars):\n```\n\(String(text.suffix(200)))\n```\n\nRecent context:\n```\n\(hint)\n```"
+        } else {
+            base = "\n\nExisting text (last 200 chars):\n```\n\(String(text.suffix(200)))\n```"
         }
-        return "\n\nExisting text (last 200 chars):\n```\n\(String(text.suffix(200)))\n```"
     case (_, let hint?) where !(hint.isEmpty):
-        return "\n\nRecent context:\n```\n\(hint)\n```"
+        base = "\n\nRecent context:\n```\n\(hint)\n```"
     default:
-        return ""
+        base = ""
     }
+    return base + buildHistoryHint(previousSegments)
 }
 
 extension PolishProfile {
@@ -508,7 +525,7 @@ extension PolishProfile {
     }
     
     func systemPrompt(context: PolishContext) -> String {
-        let contextHint = buildContextHint(existingText: context.existingText, conversationHint: context.conversationHint)
+        let contextHint = buildContextHint(existingText: context.existingText, conversationHint: context.conversationHint, previousSegments: context.previousSegments)
         
         switch self {
         case .terminal:

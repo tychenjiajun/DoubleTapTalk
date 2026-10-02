@@ -41,14 +41,14 @@ DoubleTapTalk transforms how you interact with your Mac. Instead of typing, **sp
 
 #### 🎙️ Core Speech Recognition
 - **Double-Tap Activation**: Simple Control+Control gesture to start recording
-- **Smart Stop Options**:
-  - 👆 Single-click → Insert raw transcription (instant)
-  - 👆👆 Double-click → Insert AI-polished text (smart)
+- **Simple Stop**: Single-click Control to stop — AI refinement applies **automatically** whenever it's enabled
 - **Multi-Language Support**: Auto-detect from 100+ languages or manually select
 - **Zero Setup**: No API keys, no accounts, no configuration
 - **Menu Bar Design**: Runs quietly without Dock icon clutter
 - **⚡ Streaming Live Text** (Apple backend): watch your words appear live as you speak
 - **🎛️ Recording Overlay**: frameless capsule with real-time waveform + live transcription, spring animations
+- **🔁 Continuous Dictation (Relay, opt-in)**: with the toggle enabled in Settings, the mic stays open the whole time — after a pause (default 3 s, configurable) the current segment is recognized + inserted and a new one starts, so you can dictate long passages with thinking breaks. Segments with no words recognized by Apple are skipped entirely — blank audio is never kept or uploaded to cloud ASR.
+- **🌩️ Cloud Transcription (optional)**: when enabled, the recording is saved as a WAV file and sent to an OpenAI-compatible ASR endpoint (e.g. Aliyun DashScope `qwen3-asr-flash`); any failure falls back to Apple's on-device result. With the feature off, no audio is ever written to disk.
 
 #### 🛡️ On-Device Recognition (Apple)
 
@@ -59,10 +59,10 @@ Speech recognition runs entirely on your Mac using Apple's Speech framework:
 | **Apple (On-Device)** | Offline ⚡ | Streaming live text, zero setup, privacy | ⭐⭐⭐⭐ | ⚡ Live |
 
 - ⚡ **Streaming**: watch your words appear live as you speak
-- 🔒 **Private**: audio never leaves your Mac — no uploads, no API key
+- 🔒 **Private**: live text is always Apple on-device; WAV recordings are only written when Cloud Transcription is enabled — stored locally (`~/Library/Application Support/DoubleTapTalk/Recordings/`, last 20 kept) and uploaded only for transcription
 - 🌍 **Multilingual**: auto-detect or choose zh/en/ja/ko/es/fr/de
 
-> The only backend — deliberately so. No keys, no servers, no configuration.
+> Live text is fixed to Apple's on-device recognition. Cloud transcription only replaces the final inserted text when it succeeds, and falls back to Apple otherwise — including per-segment in relay mode.
 
 #### ✨ AI-Powered Smart Polish
 Optional LLM-powered text enhancement that understands context:
@@ -90,6 +90,8 @@ Output: I'm looking for recent build failures in logs ✓ (preserved intent)
 ```
 
 **✨ What-Changed Preview**: When the AI modifies your text, the overlay previews `✨ polished result` for a second before injecting — you always see what changed.
+
+**🧠 Segment Context (relay)**: during continuous dictation each segment's refinement prompt includes the **previous segments' ASR/refinement results** (last 8, 120 chars each) so terminology and style stay consistent and prior content is not repeated.
 
 **🚫 Anti-Translation Guard**: Prompts are engineered to never translate or transliterate — English stays English, 中文 stays 中文. Kept compact (~110 tokens) for fast, cheap refinements.
 
@@ -198,8 +200,7 @@ Click ⚙️ **Settings** in menu bar (or press ⌘,):
 
 #### ⌨️ Hotkey Behavior
 - **Start Recording**: Double-click Control (configurable)
-- **Stop Without Polish**: Single-click Control or menu bar button
-- **Stop With Polish**: Double-click Control while recording
+- **Stop**: Single-click Control or the menu bar button — every segment (including the final one) is refined automatically when AI refinement is enabled
 
 **Customization**: Modify trigger keys in source code and rebuild if needed.
 

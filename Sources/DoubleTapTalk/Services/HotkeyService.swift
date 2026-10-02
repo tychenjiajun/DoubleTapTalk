@@ -5,7 +5,10 @@ import ApplicationServices
 
 final class HotkeyService {
     var onHotkeyPressed: (() -> Void)?
-    var onHotkeyReleased: ((Bool) -> Void)?  // Bool indicates whether to polish text
+    /// Fired on the first Control tap release while recording.
+    /// Refinement is governed by settings (every segment refines when enabled),
+    /// so there is no longer a no-refinement stop option.
+    var onHotkeyReleased: (() -> Void)?
     
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -116,31 +119,13 @@ final class HotkeyService {
         let now = Date()
         
         if isRecording {
-            // In recording state - handle stop
-            if let lastTap = lastTapTime, now.timeIntervalSince(lastTap) < doubleTapThreshold {
-                // Double tap detected while recording: stop with polish
-                logger.info("Double-tap Control detected while recording - stop with polish")
-                lastTapTime = nil
-                isRecording = false
-                DispatchQueue.main.async {
-                    self.onHotkeyReleased?(true)
-                }
-            } else {
-                // First tap while recording: wait for possible second tap
-                logger.debug("First Control tap detected while recording, waiting for second...")
-                lastTapTime = now
-                
-                // After threshold, treat as single tap (stop without polish)
-                DispatchQueue.main.asyncAfter(deadline: .now() + doubleTapThreshold) {
-                    if self.lastTapTime != nil {
-                        self.logger.info("Single Control tap detected - stop without polish")
-                        self.lastTapTime = nil
-                        self.isRecording = false
-                        DispatchQueue.main.async {
-                            self.onHotkeyReleased?(false)
-                        }
-                    }
-                }
+            // While recording, the first tap stops immediately (no double-tap
+            // wait — refinement no longer depends on tap count).
+            logger.info("Control tap while recording — stopping")
+            isRecording = false
+            lastTapTime = nil
+            DispatchQueue.main.async {
+                self.onHotkeyReleased?()
             }
         } else {
             // Not recording - handle start

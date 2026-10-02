@@ -24,8 +24,8 @@
 ## Key Conventions
 - Polish prompts live in `Sources/DoubleTapTalk/Models/PolishModels.swift`; shared sections `baseInstruction` + `languagePreservationSection` are reused by every profile via `buildPrompt(role:rule:contextHint:)`.
 - Keep profile prompts compact (≤620 chars, enforced by `PromptEconomyTests`). When rewording prompts, update the content assertions in `Tests/VoiceKeyTests/PolishProfileTests.swift`.
-- Speech recognition is Apple on-device only (`Backends/AppleSpeechBackend.swift`) — it streams live partial text + audio level callbacks. No ASR config, no API keys, no audio files; keep recognition-specific code in that file.
-- Polish and injection use exactly one site: `Services/PolishProcessor.swift` → `AppDelegate.finalize`. Never add a second polish/inject path.
+- Speech recognition streams live text via Apple on-device (`Backends/AppleSpeechBackend.swift`); continuous "relay" sessions live in `Backends/ContinuousDictationSession.swift` (idle-based segment rotation, ordered emission). Cloud ASR (`Services/CloudTranscriptionService.swift`) is optional, post-hoc, and must always fall back to the Apple result. WAV recordings (`Services/RecordingFileWriter.swift`) are only written when Cloud Transcription is enabled.
+- Polish happens at exactly one site: `Services/PolishProcessor.swift`. Injection happens at exactly one site: `AppDelegate.inject(_:)` (`finalize` reveals, relay segments insert quietly). Never add a second polish or inject path.
 - Logs go to `~/Library/Caches/DoubleTapTalk.log` (also written to stdout, captured by `./view-logs.sh`).
 - The installed app must be re-signed after every rebuild: `codesign --force --deep --sign - /Applications/DoubleTapTalk.app`.
 

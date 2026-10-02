@@ -129,6 +129,63 @@ enum SpeechLocaleMapper {
     }
 }
 
+/// Resolves a locale (with Apple's fallback chain) and creates an
+/// SFSpeechRecognizer for it. Shared by the single-shot backend and the
+/// continuous dictation session.
+enum SpeechRecognizerFactory {
+    static func make(locale code: String?, inputMethodLanguage: String?) -> (recognizer: SFSpeechRecognizer, locale: Locale)? {
+        var locale = SpeechLocaleMapper.locale(for: code, inputMethodLanguage: inputMethodLanguage)
+        var recognizer = SFSpeechRecognizer(locale: locale)
+        if recognizer == nil {
+            let supported = SFSpeechRecognizer.supportedLocales()
+            if let lang = locale.language.languageCode?.identifier,
+               let match = supported.first(where: { $0.language.languageCode?.identifier == lang }) {
+                locale = match
+                recognizer = SFSpeechRecognizer(locale: match)
+            } else {
+                locale = Locale(identifier: "en-US")
+                recognizer = SFSpeechRecognizer(locale: locale)
+            }
+        }
+        guard let recognizer = recognizer else { return nil }
+        return (recognizer, locale)
+    }
+}
+
+/// RMS audio level (0...1) for a tap buffer, handling Float32 and Int16 PCM.
+enum AudioLevel {
+    static func rms(of buffer: AVAudioPCMBuffer) -> Float {
+        guard buffer.format.commonFormat == .pcmFormatFloat32,
+              let mData = buffer.audioBufferList.pointee.mBuffers.mData else {
+            return rmsInt16(of: buffer)
+        }
+        let frames = Int(buffer.frameLength)
+        let data = mData.assumingMemoryBound(to: Float.self)
+        var sum: Double = 0
+        for i in 0..<frames {
+            let sample = Double(data[i])
+            sum += sample * sample
+        }
+        guard frames > 0 else { return 0 }
+        // Normalize RMS (peak 1.0 for float samples) and clamp to 0...1.
+        return Float(min(1.0, sqrt(sum / Double(frames)) * 2.0))
+    }
+
+    private static func rmsInt16(of buffer: AVAudioPCMBuffer) -> Float {
+        guard buffer.format.commonFormat == .pcmFormatInt16,
+              let mData = buffer.audioBufferList.pointee.mBuffers.mData else { return 0 }
+        let frames = Int(buffer.frameLength)
+        let data = mData.assumingMemoryBound(to: Int16.self)
+        var sum: Double = 0
+        for i in 0..<frames {
+            let sample = Double(data[i]) / 32768.0
+            sum += sample * sample
+        }
+        guard frames > 0 else { return 0 }
+        return Float(min(1.0, sqrt(sum / Double(frames)) * 2.0))
+    }
+}
+
 /// On-device streaming speech recognition using Apple's Speech framework.
 /// Delivers live partial text + audio level callbacks while recording, and
 /// returns the final transcription on stop(). No network, no API key needed.
@@ -144,6 +201,11 @@ final class AppleSpeechBackend: NSObject, SFSpeechRecognizerDelegate {
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var transcript = RecognitionTranscript()
+
+    /// WAV file of the captured audio (16 kHz mono), finalized on `stop()`.
+    /// nil when nothing was recorded or recording failed to start.
+    private(set) var recordingFileURL: URL?
+    private var recorder: RecordingFileWriter?
 
     private var inputFormat: AVAudioFormat?
     private var converter: AVAudioConverter?
@@ -162,28 +224,13 @@ final class AppleSpeechBackend: NSObject, SFSpeechRecognizerDelegate {
     // MARK: - Lifecycle
 
     func start(language code: String?, inputMethodLanguage: String? = nil) throws {
-        var locale = SpeechLocaleMapper.locale(for: code, inputMethodLanguage: inputMethodLanguage)
-        
-        // Safety net: if the mapped locale still isn't supported by the SDK,
-        // walk the supported list for a language match before giving up.
-        var recognizer = SFSpeechRecognizer(locale: locale)
-        if recognizer == nil {
-            let supported = SFSpeechRecognizer.supportedLocales()
-            if let lang = locale.language.languageCode?.identifier,
-               let match = supported.first(where: { $0.language.languageCode?.identifier == lang }) {
-                locale = match
-                recognizer = SFSpeechRecognizer(locale: match)
-            } else {
-                locale = Locale(identifier: "en-US")
-                recognizer = SFSpeechRecognizer(locale: locale)
-            }
-        }
-        
-        guard let recognizer = recognizer else {
-            let message = "Speech recognition is not supported for \(locale.identifier). Download the language in System Settings > Keyboard > Dictation."
+        guard let pair = SpeechRecognizerFactory.make(locale: code, inputMethodLanguage: inputMethodLanguage) else {
+            let message = "Speech recognition is not supported for \(SpeechLocaleMapper.locale(for: code, inputMethodLanguage: inputMethodLanguage).identifier). Download the language in System Settings > Keyboard > Dictation."
             onError?(message)
             throw PipelineError.transcriptionFailed(message)
         }
+        let recognizer = pair.recognizer
+        let locale = pair.locale
 
         transcript.reset()
         let recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
@@ -227,10 +274,24 @@ final class AppleSpeechBackend: NSObject, SFSpeechRecognizerDelegate {
         converter = AVAudioConverter(from: inputFormat, to: targetFormat)
         converterFormat = targetFormat
 
+        // Save the same 16 kHz mono stream to a WAV file ONLY when cloud
+        // transcription is enabled — the file exists purely to be uploaded, so
+        // with ASR off no audio ever touches disk. Best-effort: a recording
+        // failure must never stop recognition.
+        if ASRSettings.current().enabled,
+           let writer = RecordingFileWriter(directory: RecordingFileWriter.defaultDirectory()) {
+            do {
+                try writer.open()
+                recorder = writer
+            } catch {
+                logger.warning("Could not open recording file: \(error)")
+            }
+        }
+
         let request = recognitionRequest
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, _ in
             guard let self else { return }
-            self.onAudioLevel?(self.rms(of: buffer))
+            self.onAudioLevel?(AudioLevel.rms(of: buffer))
             self.appendToRecognition(buffer, request: request)
         }
 
@@ -239,6 +300,7 @@ final class AppleSpeechBackend: NSObject, SFSpeechRecognizerDelegate {
             try audioEngine.start()
         } catch {
             logger.error("Failed to start audio engine: \(error)")
+            recorder?.cancel()
             throw error
         }
 
@@ -262,6 +324,19 @@ final class AppleSpeechBackend: NSObject, SFSpeechRecognizerDelegate {
 
         let text = transcript.currentText
         logger.info("Apple recognition result: '\(text)'")
+
+        // Finalize the recorded audio. Segments with no recognized words are
+        // skipped entirely — the blank recording is deleted so it is never kept
+        // or sent to cloud ASR.
+        let hasWords = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if hasWords {
+            recordingFileURL = recorder?.finish()
+        } else {
+            recorder?.cancel()
+            recordingFileURL = nil
+        }
+        recorder = nil
+
         return text
     }
 
@@ -273,10 +348,12 @@ final class AppleSpeechBackend: NSObject, SFSpeechRecognizerDelegate {
     private func appendToRecognition(_ buffer: AVAudioPCMBuffer, request: SFSpeechAudioBufferRecognitionRequest) {
         guard let converter, let targetFormat = converterFormat else {
             request.append(buffer)
+            recorder?.append(buffer)
             return
         }
         if abs(buffer.format.sampleRate - 16000) < 0.5 && buffer.format.channelCount == 1 {
             request.append(buffer)
+            recorder?.append(buffer)
             return
         }
         // The converter consumes input synchronously inside this tap callback,
@@ -297,37 +374,7 @@ final class AppleSpeechBackend: NSObject, SFSpeechRecognizerDelegate {
         }
         if out.frameLength > 0, status == .haveData || status == .inputRanDry {
             request.append(out)
+            recorder?.append(out)
         }
-    }
-
-    private func rms(of buffer: AVAudioPCMBuffer) -> Float {
-        guard buffer.format.commonFormat == .pcmFormatFloat32,
-              let mData = buffer.audioBufferList.pointee.mBuffers.mData else {
-            return rmsInt16(of: buffer)
-        }
-        let frames = Int(buffer.frameLength)
-        let data = mData.assumingMemoryBound(to: Float.self)
-        var sum: Double = 0
-        for i in 0..<frames {
-            let sample = Double(data[i])
-            sum += sample * sample
-        }
-        guard frames > 0 else { return 0 }
-        // Normalize RMS (peak 1.0 for float samples) and clamp to 0...1.
-        return Float(min(1.0, sqrt(sum / Double(frames)) * 2.0))
-    }
-
-    private func rmsInt16(of buffer: AVAudioPCMBuffer) -> Float {
-        guard buffer.format.commonFormat == .pcmFormatInt16,
-              let mData = buffer.audioBufferList.pointee.mBuffers.mData else { return 0 }
-        let frames = Int(buffer.frameLength)
-        let data = mData.assumingMemoryBound(to: Int16.self)
-        var sum: Double = 0
-        for i in 0..<frames {
-            let sample = Double(data[i]) / 32768.0
-            sum += sample * sample
-        }
-        guard frames > 0 else { return 0 }
-        return Float(min(1.0, sqrt(sum / Double(frames)) * 2.0))
     }
 }

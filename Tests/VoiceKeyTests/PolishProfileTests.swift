@@ -263,6 +263,41 @@ final class PolishProfileTests: XCTestCase {
         XCTAssertTrue(prompt.contains("intent"), "Should preserve speaker intent")
     }
     
+    // MARK: - Dictation History Context Tests
+
+    func testPromptIncludesEarlierSegments() {
+        var context = createPolishContext(profile: .general)
+        context.previousSegments = ["第一段内容", "第二段内容"]
+        let prompt = PolishProfile.general.systemPrompt(context: context)
+
+        XCTAssertTrue(prompt.contains("Earlier dictation"), "Prompt must include the earlier-dictation section")
+        XCTAssertTrue(prompt.contains("第一段内容"), "Prompt must include earlier segment text")
+        XCTAssertTrue(prompt.contains("第二段内容"), "Prompt must include later earlier segment text")
+        XCTAssertTrue(prompt.contains("do NOT repeat"), "Prompt must instruct not to repeat prior content")
+    }
+
+    func testHistoryIsCappedToEightSegmentsAndTruncated() {
+        var context = createPolishContext(profile: .general)
+        let longSegment = String(repeating: "字", count: 500)
+        context.previousSegments = (0..<12).map { _ in longSegment }
+        let prompt = PolishProfile.general.systemPrompt(context: context)
+
+        // Cap: at most 8 numbered history lines.
+        let numbered = prompt.components(separatedBy: "\n").filter { line in
+            line.range(of: #"^\d+\) "#, options: .regularExpression) != nil
+        }.count
+        XCTAssertLessThanOrEqual(numbered, 8, "History must cap at the last 8 segments")
+
+        // Each entry is truncated to 120 chars: 8 × 120 + overhead stays small.
+        XCTAssertLessThanOrEqual(prompt.count, 2400)
+    }
+
+    func testNoHistoryNoHistorySection() {
+        let context = createPolishContext(profile: .terminal)
+        let prompt = PolishProfile.terminal.systemPrompt(context: context)
+        XCTAssertFalse(prompt.contains("Earlier dictation"), "No history section when there are no previous segments")
+    }
+
     // MARK: - Bundle ID Mappings Tests
     
     func testBundleIDMappingsContainCategories() {

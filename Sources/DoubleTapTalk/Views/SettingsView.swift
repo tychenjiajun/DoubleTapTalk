@@ -9,6 +9,11 @@ struct SettingsView: View {
     @State private var showLLMApiKey: Bool = false
     @State private var llmBaseURLInput: String = ""
     
+    // Cloud Transcription state
+    @State private var asrApiKeyInput: String = ""
+    @State private var showASRApiKey: Bool = false
+    @State private var asrBaseURLInput: String = ""
+
     // Accessibility and microphone info state
     @State private var hasAccessibilityPermission: Bool = AccessibilityService.shared.hasAccessibilityPermission()
     @State private var currentMicrophoneName: String? = nil
@@ -44,14 +49,49 @@ struct SettingsView: View {
                 Text("Speech Recognition")
             }
             
+            // MARK: - Continuous Dictation Section
             Section {
-                Text("Double-click Control key to start recording. Single-click to stop without polish, double-click to stop with AI polish.")
+                Toggle(isOn: $settings.relayEnabled) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Continuous dictation (relay)")
+                            .fontWeight(.medium)
+                        Text("Keep the microphone open the whole time. After a pause without new words, the current segment is recognized and inserted automatically, and a new segment starts — so you can dictate a long passage with thinking breaks in between.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                if settings.relayEnabled {
+                    HStack {
+                        Text("Segment idle threshold:")
+                        Spacer()
+                        Text(String(format: "%.1fs", settings.relayIdleThreshold))
+                            .monospacedDigit()
+                            .foregroundColor(.secondary)
+                        Slider(value: $settings.relayIdleThreshold, in: 1.0...10.0, step: 0.5)
+                            .frame(width: 150)
+                    }
+                    Text("How long Apple must hear no new words before the segment is cut and inserted. Shorter = snappier, longer = fewer splits.")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            } header: {
+                Text("Continuous Dictation")
+            } footer: {
+                Text(settings.relayEnabled ? "Each segment is uploaded for cloud transcription (if enabled) and inserted automatically; live text during dictation stays Apple on-device. The microphone stays open from the starting double-tap until the next Control tap stops the session." : "Off: one segment per recording — double-click Control to start, single-click to stop.")
+                    .font(.caption)
+            }
+
+            Section {
+                Text("Double-click Control key to start recording. Single-click to stop. AI refinement applies automatically to every segment when enabled (including during continuous dictation).")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
                 Button("Reset to Defaults") {
                     settings.reset()
                     llmApiKeyInput = ""
+                    asrApiKeyInput = ""
+                    asrBaseURLInput = ""
                 }
             } header: {
                 Text("Usage")
@@ -213,7 +253,85 @@ struct SettingsView: View {
             } header: {
                 Text("AI Text Polishing")
             } footer: {
-                Text(settings.llmEnabled ? "Polished transcription will be injected instead of the raw ASR output." : "Optional: Use an LLM to improve transcription quality.")
+                Text(settings.llmEnabled ? "Applied automatically to each dictation segment when it completes; earlier segments are included as context for consistent terminology and style." : "Optional: Use an LLM to improve transcription quality.")
+                    .font(.caption)
+            }
+
+            // MARK: - Cloud Transcription Section
+            Section {
+                Toggle(isOn: $settings.asrEnabled) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Enable Cloud Transcription")
+                            .fontWeight(.medium)
+                        Text("After recording, the audio file is sent to an OpenAI-compatible ASR endpoint (e.g. Aliyun DashScope qwen3-asr-flash) for a more accurate result. Falls back to Apple on-device recognition on any failure.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                if settings.asrEnabled {
+                    VStack(alignment: .leading, spacing: 12) {
+                        // Base URL
+                        HStack {
+                            TextField("Base URL (OpenAI-compatible)", text: $asrBaseURLInput)
+                                .textFieldStyle(.roundedBorder)
+                            Button("Save") {
+                                settings.asrBaseURL = asrBaseURLInput.isEmpty ? nil : asrBaseURLInput
+                            }
+                            if settings.asrBaseURL != nil {
+                                Button("Clear") {
+                                    settings.asrBaseURL = nil
+                                    asrBaseURLInput = ""
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                        }
+                        Text("Example: https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1 — leave empty to reuse the LLM base URL.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+
+                        // API key
+                        HStack {
+                            if showASRApiKey {
+                                TextField("API Key", text: $asrApiKeyInput)
+                                    .textFieldStyle(.roundedBorder)
+                            } else {
+                                SecureField("API Key", text: $asrApiKeyInput)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+                            Button(showASRApiKey ? "Hide" : "Show") {
+                                showASRApiKey.toggle()
+                            }
+                            Button("Save") {
+                                settings.asrAPIKey = asrApiKeyInput.isEmpty ? nil : asrApiKeyInput
+                            }
+                        }
+                        Text("Leave empty to reuse the LLM API key.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+
+                        // Model
+                        TextField("Model Name", text: $settings.asrModel)
+                            .textFieldStyle(.roundedBorder)
+                        Text("Default: qwen3-asr-flash (OpenAI-compatible mode; audio file limited to 10 MB / 5 min).")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+
+                        // Recording note
+                        HStack(spacing: 6) {
+                            Image(systemName: "waveform.badge.record")
+                                .foregroundColor(.secondary)
+                            Text("Recordings are saved to Application Support/DoubleTapTalk/Recordings (last 20 kept).")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 8)
+                }
+            } header: {
+                Text("Cloud Transcription (OpenAI-compatible ASR)")
+            } footer: {
+                Text(settings.asrEnabled ? "Live text during recording stays Apple on-device. The cloud result replaces the injected text only when the request succeeds." : "Optional: server-side transcription beats Apple on accuracy — requires an OpenAI-compatible ASR endpoint.")
                     .font(.caption)
             }
         }
@@ -223,6 +341,8 @@ struct SettingsView: View {
         .onAppear {
             llmApiKeyInput = settings.llmAPIKey ?? ""
             llmBaseURLInput = settings.llmBaseURL ?? ""
+            asrApiKeyInput = settings.asrAPIKey ?? ""
+            asrBaseURLInput = settings.asrBaseURL ?? ""
             hasAccessibilityPermission = AccessibilityService.shared.hasAccessibilityPermission()
             currentMicrophoneName = MicrophonePermissionService.shared.currentMicrophoneName()
         }
@@ -231,6 +351,12 @@ struct SettingsView: View {
         }
         .onChange(of: settings.llmAPIKey) { newValue in
             llmApiKeyInput = newValue ?? ""
+        }
+        .onChange(of: settings.asrBaseURL) { newValue in
+            asrBaseURLInput = newValue ?? ""
+        }
+        .onChange(of: settings.asrAPIKey) { newValue in
+            asrApiKeyInput = newValue ?? ""
         }
     }
 }

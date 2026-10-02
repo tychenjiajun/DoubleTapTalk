@@ -22,6 +22,14 @@ final class DoubleTapTalkSettings: ObservableObject {
         static let llmTimeout = "LLMTimeout"
         static let useAppSpecificPolish = "UseAppSpecificPolish"
         static let pinnedPolishProfile = "PinnedPolishProfile"
+        // Cloud transcription (OpenAI-compatible ASR) keys
+        static let asrEnabled = "ASREnabled"
+        static let asrBaseURL = "ASRBaseURL"
+        static let asrAPIKey = "ASRAPIKey"
+        static let asrModel = "ASRModel"
+        // Continuous dictation (relay) keys
+        static let relayEnabled = "RelayEnabled"
+        static let relayIdleThreshold = "RelayIdleThreshold"
     }
     
     @Published var language: String {
@@ -104,6 +112,54 @@ final class DoubleTapTalkSettings: ObservableObject {
         }
     }
     
+    // MARK: - Cloud Transcription Settings (OpenAI-compatible ASR)
+
+    @Published var asrEnabled: Bool {
+        didSet {
+            defaults.set(asrEnabled, forKey: Keys.asrEnabled)
+            logger.info("Settings: Cloud transcription \(asrEnabled ? "enabled" : "disabled")")
+        }
+    }
+
+    @Published var asrModel: String {
+        didSet {
+            defaults.set(asrModel, forKey: Keys.asrModel)
+        }
+    }
+
+    @Published var asrBaseURL: String? = nil {
+        didSet {
+            defaults.set(asrBaseURL, forKey: Keys.asrBaseURL)
+            logger.info("Settings: Cloud ASR base URL \(asrBaseURL != nil ? "saved" : "cleared")")
+        }
+    }
+
+    @Published var asrAPIKey: String? = nil {
+        didSet {
+            defaults.set(asrAPIKey, forKey: Keys.asrAPIKey)
+            logger.info("Settings: Cloud ASR API key \(asrAPIKey != nil ? "saved" : "cleared")")
+        }
+    }
+
+    // MARK: - Continuous Dictation (Relay) Settings
+
+    /// When on, the microphone stays open across segments: after `relayIdleThreshold`
+    /// seconds without new words the current segment is recognized + inserted and
+    /// a new one starts — one long dictation with thinking pauses in between.
+    @Published var relayEnabled: Bool {
+        didSet {
+            defaults.set(relayEnabled, forKey: Keys.relayEnabled)
+            logger.info("Settings: Continuous dictation \(relayEnabled ? "enabled" : "disabled")")
+        }
+    }
+
+    @Published var relayIdleThreshold: Double {
+        didSet {
+            defaults.set(relayIdleThreshold, forKey: Keys.relayIdleThreshold)
+            logger.info("Settings: Relay idle threshold \(relayIdleThreshold)s saved")
+        }
+    }
+
     private init() {
         self.language = defaults.string(forKey: Keys.language) ?? "auto"
         
@@ -126,6 +182,21 @@ final class DoubleTapTalkSettings: ObservableObject {
         self.llmBaseURL = defaults.string(forKey: Keys.llmBaseURL)
         let timeoutValue = defaults.double(forKey: Keys.llmTimeout)
         self.llmTimeout = timeoutValue > 0.0 ? timeoutValue : 5.0
+
+        // Initialize cloud transcription stored properties before any computed
+        // property access (Swift definite-initialization rule).
+        self.asrEnabled = defaults.bool(forKey: Keys.asrEnabled)
+        self.asrModel = defaults.string(forKey: Keys.asrModel) ?? ASRSettings.defaultModel
+        self.asrBaseURL = defaults.string(forKey: Keys.asrBaseURL)
+        self.asrAPIKey = defaults.string(forKey: Keys.asrAPIKey)
+
+        // Load continuous dictation settings. Relay is OPT-IN (default OFF):
+        // it changes the core UX (mic stays open, auto-split + auto-insert),
+        // so existing users must not get it on upgrade without asking.
+        self.relayEnabled = defaults.bool(forKey: Keys.relayEnabled)
+        let relayThreshold = defaults.double(forKey: Keys.relayIdleThreshold)
+        self.relayIdleThreshold = relayThreshold > 0.0 ? relayThreshold : 3.0
+
         self.llmSystemPrompt = defaults.string(forKey: Keys.llmSystemPrompt) ?? LLMSettings.default.systemPrompt
         self.llmAPIKey = defaults.string(forKey: "LLMAPIKey")
     }
@@ -139,5 +210,15 @@ final class DoubleTapTalkSettings: ObservableObject {
         llmModel = "gpt-4o-mini"
         llmTemperature = 0.3
         useAppSpecificPolish = true  // Default to enabled
+
+        // Reset cloud transcription settings
+        asrEnabled = false
+        asrModel = ASRSettings.defaultModel
+        asrBaseURL = nil
+        asrAPIKey = nil
+
+        // Reset continuous dictation settings
+        relayEnabled = false
+        relayIdleThreshold = 3.0
     }
 }

@@ -10,11 +10,14 @@ private let logger = FileLogger.shared
 /// always falls back to the original text.
 final class PolishProcessor {
 
-    /// Applies LLM polishing to raw speech-to-text output when enabled and configured.
-    /// - Returns: the polished text, or the original text unchanged when polishing is
-    ///   disabled, unconfigured, or fails.
-    func process(rawText: String, settings: LLMSettings, polishEnabled: Bool) async -> String {
-        guard polishEnabled, settings.enabled else {
+    /// Applies LLM polishing to raw speech-to-text output when configured.
+    /// - Parameter previousSegments: earlier results of the same dictation
+    ///   session, fed into the prompt so the model keeps terminology/style
+    ///   consistent and doesn't repeat prior content.
+    /// - Returns: the polished text, or the original text unchanged when polishing
+    ///   is disabled, unconfigured, or fails.
+    func process(rawText: String, settings: LLMSettings, previousSegments: [String] = []) async -> String {
+        guard settings.enabled else {
             return rawText
         }
 
@@ -64,7 +67,8 @@ final class PolishProcessor {
             targetApp: appContext,
             existingText: existingText,
             conversationHint: conversationHint,
-            userLocale: localeIdentifier
+            userLocale: localeIdentifier,
+            previousSegments: previousSegments
         )
 
         logger.debug("Polish context:")
@@ -73,6 +77,7 @@ final class PolishProcessor {
         logger.debug("  - Is terminal: \(polishContext.targetApp.isTerminal)")
         logger.debug("  - Existing text length: \((polishContext.existingText?.count ?? 0)) chars")
         logger.debug("  - Terminal context length: \((polishContext.conversationHint?.count ?? 0)) chars")
+        logger.debug("  - Previous segments: \(polishContext.previousSegments.count)")
 
         do {
             // Try polishing with configurable timeout

@@ -14,14 +14,18 @@
 		3E0E26DB6DBEB9E2CBBCEDE9 /* StatusBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 614C2A53F6BE423DAEE8E7CA /* StatusBarController.swift */; };
 		4D18019C00F53EA80C8D3C0E /* SettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1F8906590DA4E7A4F022941 /* SettingsWindowController.swift */; };
 		6EF7C6837B2AE12C791EB6ED /* OverlayMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = C232BBF96AB595320BBBCA43 /* OverlayMetrics.swift */; };
+		704554D1F535E1109D32B3DA /* RecordingFileWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11BBD14466F5C91817D48534 /* RecordingFileWriter.swift */; };
 		885506C747E7348F10D39A1B /* WaveformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D15A7716E4C4A101E43F839 /* WaveformView.swift */; };
 		8FFA2661B9D3B4B7DF466688 /* LLMService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCF904CA137C20A1DEA9B59A /* LLMService.swift */; };
 		9266DA22F19DF21F44194AC2 /* HotkeyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DDBB70D68CC1A7D870D3115 /* HotkeyService.swift */; };
 		934F1F464337AD7BA187B16B /* MicrophonePermissionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A8F33F795AE6DF93EA56FF9 /* MicrophonePermissionService.swift */; };
+		9A75BB952EC3200542642548 /* ContinuousDictationSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDC0C224A4AB840702A4820F /* ContinuousDictationSession.swift */; };
+		A42B132BA46F40B14C25E2CB /* ASRSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 929E7C82675CFC7C36E8D100 /* ASRSettings.swift */; };
 		A5C32F17E0CDD9DEFE190A71 /* PipelineError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53D79246657B8C6808F0CEC4 /* PipelineError.swift */; };
 		AA9177B7B27D2A9C12A91A04 /* LLMProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 580517CA1DE77BD9581EAACB /* LLMProvider.swift */; };
 		AB82F2F5C9E4A77A69C04A15 /* TextInjectionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B1288EFBEDCE17AE394B1BB /* TextInjectionService.swift */; };
 		CB70F4C9CAFF36529C7E6487 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 417D43B5AB8DD1C9E38F1E91 /* Settings.swift */; };
+		CE53A33A2E79BB0E4FE34630 /* CloudTranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C39F972B02531CE2DA58401 /* CloudTranscriptionService.swift */; };
 		E88C95A0C23F5D6F2E0E2D50 /* PolishModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8201174E2DBE014AE074582 /* PolishModels.swift */; };
 		F71BEF73A18538F542FDA765 /* AppleSpeechBackend.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CE750A52CB76E69F7C1A85E /* AppleSpeechBackend.swift */; };
 		F94AFC359096B7512D596A46 /* DoubleTapTalkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B92E1182E5EDD3E9294A736 /* DoubleTapTalkApp.swift */; };
@@ -29,7 +33,9 @@
 
 /* Begin PBXFileReference section */
 		0CE750A52CB76E69F7C1A85E /* AppleSpeechBackend.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSpeechBackend.swift; sourceTree = "<group>"; };
+		11BBD14466F5C91817D48534 /* RecordingFileWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingFileWriter.swift; sourceTree = "<group>"; };
 		1A8F33F795AE6DF93EA56FF9 /* MicrophonePermissionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophonePermissionService.swift; sourceTree = "<group>"; };
+		1C39F972B02531CE2DA58401 /* CloudTranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudTranscriptionService.swift; sourceTree = "<group>"; };
 		20C905C9C730978287EBF24B /* AccessibilityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityService.swift; sourceTree = "<group>"; };
 		2DDBB70D68CC1A7D870D3115 /* HotkeyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyService.swift; sourceTree = "<group>"; };
 		3D15A7716E4C4A101E43F839 /* WaveformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaveformView.swift; sourceTree = "<group>"; };
@@ -39,9 +45,11 @@
 		5B1288EFBEDCE17AE394B1BB /* TextInjectionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextInjectionService.swift; sourceTree = "<group>"; };
 		614C2A53F6BE423DAEE8E7CA /* StatusBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarController.swift; sourceTree = "<group>"; };
 		8243353DE18977850AC6BDBB /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		929E7C82675CFC7C36E8D100 /* ASRSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ASRSettings.swift; sourceTree = "<group>"; };
 		9B92E1182E5EDD3E9294A736 /* DoubleTapTalkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoubleTapTalkApp.swift; sourceTree = "<group>"; };
 		A41F0C0AB39501E3C01C0282 /* PolishProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolishProcessor.swift; sourceTree = "<group>"; };
 		A8201174E2DBE014AE074582 /* PolishModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PolishModels.swift; sourceTree = "<group>"; };
+		BDC0C224A4AB840702A4820F /* ContinuousDictationSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinuousDictationSession.swift; sourceTree = "<group>"; };
 		C1F8906590DA4E7A4F022941 /* SettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowController.swift; sourceTree = "<group>"; };
 		C232BBF96AB595320BBBCA43 /* OverlayMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayMetrics.swift; sourceTree = "<group>"; };
 		CCDB5A3EC76A239845D26279 /* DoubleTapTalk.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DoubleTapTalk.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -69,6 +77,7 @@
 		5077817CC1C8BF98E7D4A128 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				929E7C82675CFC7C36E8D100 /* ASRSettings.swift */,
 				580517CA1DE77BD9581EAACB /* LLMProvider.swift */,
 				53D79246657B8C6808F0CEC4 /* PipelineError.swift */,
 				A8201174E2DBE014AE074582 /* PolishModels.swift */,
@@ -112,10 +121,12 @@
 			isa = PBXGroup;
 			children = (
 				20C905C9C730978287EBF24B /* AccessibilityService.swift */,
+				1C39F972B02531CE2DA58401 /* CloudTranscriptionService.swift */,
 				2DDBB70D68CC1A7D870D3115 /* HotkeyService.swift */,
 				CCF904CA137C20A1DEA9B59A /* LLMService.swift */,
 				1A8F33F795AE6DF93EA56FF9 /* MicrophonePermissionService.swift */,
 				A41F0C0AB39501E3C01C0282 /* PolishProcessor.swift */,
+				11BBD14466F5C91817D48534 /* RecordingFileWriter.swift */,
 				5B1288EFBEDCE17AE394B1BB /* TextInjectionService.swift */,
 			);
 			path = Services;
@@ -125,6 +136,7 @@
 			isa = PBXGroup;
 			children = (
 				0CE750A52CB76E69F7C1A85E /* AppleSpeechBackend.swift */,
+				BDC0C224A4AB840702A4820F /* ContinuousDictationSession.swift */,
 			);
 			path = Backends;
 			sourceTree = "<group>";
@@ -198,8 +210,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A42B132BA46F40B14C25E2CB /* ASRSettings.swift in Sources */,
 				27133A3971807B2E0C783FB8 /* AccessibilityService.swift in Sources */,
 				F71BEF73A18538F542FDA765 /* AppleSpeechBackend.swift in Sources */,
+				CE53A33A2E79BB0E4FE34630 /* CloudTranscriptionService.swift in Sources */,
+				9A75BB952EC3200542642548 /* ContinuousDictationSession.swift in Sources */,
 				F94AFC359096B7512D596A46 /* DoubleTapTalkApp.swift in Sources */,
 				9266DA22F19DF21F44194AC2 /* HotkeyService.swift in Sources */,
 				AA9177B7B27D2A9C12A91A04 /* LLMProvider.swift in Sources */,
@@ -209,6 +224,7 @@
 				A5C32F17E0CDD9DEFE190A71 /* PipelineError.swift in Sources */,
 				E88C95A0C23F5D6F2E0E2D50 /* PolishModels.swift in Sources */,
 				25BFA2D38138A3DA831A2F34 /* PolishProcessor.swift in Sources */,
+				704554D1F535E1109D32B3DA /* RecordingFileWriter.swift in Sources */,
 				2B2A4C93C4AF5818C8127D29 /* RecordingOverlayPanel.swift in Sources */,
 				CB70F4C9CAFF36529C7E6487 /* Settings.swift in Sources */,
 				3D8A990FB0C645484F9F5770 /* SettingsView.swift in Sources */,
