@@ -174,12 +174,16 @@ final class RecordingOverlayPanel: NSPanel {
     }
 
     /// A segment landed in the document: brief receipt, then back to normal.
+    /// The receipt carries the segment number — the user maps receipts onto
+    /// what they said.
     func noteSegmentInserted(characters: Int) {
         guard layout == .session else { return }
         ledger.noteInserted(characters: characters)
         state = .listening
         resolved = style(for: state)
-        setReceipt(text: OverlaySessionCopy.inserted(characters: characters, language: overlayLanguage),
+        setReceipt(text: OverlaySessionCopy.inserted(segment: ledger.segmentsInserted,
+                                                     characters: characters,
+                                                     language: overlayLanguage),
                    tint: .positive,
                    duration: OverlaySessionCopy.receiptDuration)
         flashBorder(.positive)
@@ -200,7 +204,8 @@ final class RecordingOverlayPanel: NSPanel {
         ledger.noteSkipped()
         state = .listening
         resolved = style(for: state)
-        setReceipt(text: OverlaySessionCopy.skipped(language: overlayLanguage),
+        setReceipt(text: OverlaySessionCopy.skipped(segment: ledger.segmentsStarted,
+                                                    language: overlayLanguage),
                    tint: .caution,
                    duration: OverlaySessionCopy.skippedReceiptDuration)
         flashBorder(.caution)

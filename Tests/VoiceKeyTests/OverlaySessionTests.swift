@@ -133,8 +133,8 @@ final class OverlaySessionCopyTests: XCTestCase {
             { OverlaySessionCopy.segmentIndex(3, language: $0) },
             { OverlaySessionCopy.uploading(language: $0) },
             { OverlaySessionCopy.polishing(language: $0) },
-            { OverlaySessionCopy.inserted(characters: 24, language: $0) },
-            { OverlaySessionCopy.skipped(language: $0) },
+            { OverlaySessionCopy.inserted(segment: 3, characters: 24, language: $0) },
+            { OverlaySessionCopy.skipped(segment: 2, language: $0) },
             { OverlaySessionCopy.failureLedger(2, language: $0) },
             { OverlaySessionCopy.endRelaySession(language: $0) },
             { OverlaySessionCopy.relayHeader(segments: 3, clock: "1:42", language: $0) },
@@ -155,8 +155,23 @@ final class OverlaySessionCopyTests: XCTestCase {
     }
 
     func testInsertedReceiptCarriesTheCharacterCount() {
-        XCTAssertTrue(OverlaySessionCopy.inserted(characters: 24, language: .english).contains("24"))
-        XCTAssertTrue(OverlaySessionCopy.inserted(characters: 24, language: .simplifiedChinese).contains("24"))
+        XCTAssertTrue(OverlaySessionCopy.inserted(segment: 2, characters: 24, language: .english).contains("24"))
+        XCTAssertTrue(OverlaySessionCopy.inserted(segment: 2, characters: 24, language: .simplifiedChinese).contains("24"))
+    }
+
+    func testInsertedReceiptCarriesTheSegmentNumber() {
+        let zh = OverlaySessionCopy.inserted(segment: 3, characters: 24, language: .simplifiedChinese)
+        XCTAssertTrue(zh.hasPrefix("第 3 段"))
+        XCTAssertTrue(zh.contains("24"))
+        XCTAssertTrue(zh.contains("已插入"))
+        let en = OverlaySessionCopy.inserted(segment: 3, characters: 24, language: .english)
+        XCTAssertTrue(en.hasPrefix("Seg 3"))
+        XCTAssertTrue(en.contains("24"))
+    }
+
+    func testSkippedReceiptCarriesTheSegmentNumber() {
+        XCTAssertTrue(OverlaySessionCopy.skipped(segment: 2, language: .simplifiedChinese).hasPrefix("第 2 段"))
+        XCTAssertTrue(OverlaySessionCopy.skipped(segment: 2, language: .english).hasPrefix("Seg 2"))
     }
 
     func testRelayHeaderCarriesSegmentCountAndClock() {

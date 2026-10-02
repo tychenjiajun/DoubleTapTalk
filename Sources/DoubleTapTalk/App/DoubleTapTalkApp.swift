@@ -26,6 +26,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var relayIsFinalizing = false
     /// Segments that actually landed, mirrored into the menu bar header.
     private var relaySegmentsInserted = 0
+    /// Characters actually inserted this relay session, for the closing summary.
+    private var relaySessionChars = 0
+    /// When the relay session's mic opened — the summary reports total seconds.
+    private var relaySessionStartedAt: Date?
     /// Serializes segment insertions so rotated segments land in order even
     /// though their cloud-ASR work finishes at different times.
     private let relayChain = OrderedTaskChain()
@@ -139,6 +143,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // next one-shot dictation.
             relayIsFinalizing = false
             relaySegmentsInserted = 0
+            relaySessionChars = 0
+            relaySessionStartedAt = nil
 
             // Check and request microphone permission if needed
             let status = AVCaptureDevice.authorizationStatus(for: .audio)
@@ -315,6 +321,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         relaySession = session
         relayIsFinalizing = false
         relaySegmentsInserted = 0
+        relaySessionChars = 0
+        relaySessionStartedAt = Date()
 
         await MainActor.run {
             // Session HUD: persistent capsule + menu bar header for as long as
@@ -488,9 +496,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Single injection point: both the classic finalize() flow and relay
     /// intermediate segments land text here (PolishProcessor is the single
-    /// polish point feeding it — see AGENTS.md).
+    /// polish point feeding it — see AGENTS.md). Reports which app the text
+    /// went into, so an injection drifting to the wrong window is traceable.
     private func inject(_ text: String) {
-        logger.info("Injecting text: \(text)")
+        let target = NSWorkspace.shared.frontmostApplication?.localizedName ?? "unknown"
+        logger.info("Injecting \(text.count) chars into \(target): \(text)")
         textInjectionService?.injectText(text)
         NSSound(named: "Pop")?.play()
     }
@@ -500,6 +510,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// quietly — never touches the overlay or the live segment. Segments with
     /// no words recognized by Apple are skipped (no blank audio to ASR).
     private func insertRelaySegment(_ result: ContinuousDictationSession.SegmentTranscript, generation: Int) async {
+        let segmentBegan = Date()
         await MainActor.run { self.recordingOverlay.noteSegmentStarted() }
         guard !result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             logger.info("Relay segment: no words recognized by Apple — skipping")
@@ -508,25 +519,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         var text = result.text
         let asr = ASRSettings.current()
+        var cloudMs = 0
         if asr.enabled, let url = result.recordingFileURL {
             await MainActor.run { self.recordingOverlay.showTranscribing() }
+            let cloudBegan = Date()
             if let cloudText = await CloudTranscriptionService.shared.transcribe(fileURL: url, settings: asr) {
                 text = cloudText
                 logger.info("Relay segment: cloud transcription used")
             } else {
                 logger.info("Relay segment: cloud unavailable — using Apple result")
             }
+            cloudMs = Int(Date().timeIntervalSince(cloudBegan) * 1000)
         }
 
         // Refinement runs when the LLM is enabled+configured — automatically,
         // no tap distinction needed.
+        var polishMs = 0
         if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             await MainActor.run { self.recordingOverlay.showPolishing() }
+            let polishBegan = Date()
             text = await PolishProcessor().process(
                 rawText: text,
                 settings: LLMSettings.current(),
                 previousSegments: segmentHistorySnapshot()
             )
+            polishMs = Int(Date().timeIntervalSince(polishBegan) * 1000)
         }
 
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -541,16 +558,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         appendSegmentHistory(text)
-        logger.info("Relay segment injecting: \(text)")
         let toInject = text
         let characterCount = text.count
+        let totalMs = Int(Date().timeIntervalSince(segmentBegan) * 1000)
+        let cloudMsFinal = cloudMs
+        let polishMsFinal = polishMs
         await MainActor.run {
             guard self.isCurrentGeneration(generation) else { return }
             // Receipt: the user hears the pop, and now sees which segment landed.
             self.relaySegmentsInserted += 1
+            self.relaySessionChars += characterCount
             self.recordingOverlay.noteSegmentInserted(characters: characterCount)
             self.statusBarController?.updateRelayProgress(segments: self.relaySegmentsInserted)
             self.inject(toInject)
+            self.logger.info("Relay segment \(self.relaySegmentsInserted) injected in \(totalMs)ms (cloud \(cloudMsFinal)ms · polish \(polishMsFinal)ms · \(characterCount) chars)")
         }
     }
 
@@ -637,10 +658,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // A relay session closes with a receipt: how much landed, how
                 // long it took, what never made it in. Without it, stopping a
                 // long session looks exactly like a one-shot dictation.
+                let inserted = self.relaySegmentsInserted
+                let chars = self.relaySessionChars
+                let duration = self.relaySessionStartedAt.map { Date().timeIntervalSince($0) }
+                let durationText = duration.map { String(format: "%.1f", $0) } ?? "?"
+                self.logger.info("Relay session complete: \(inserted) segments inserted · \(chars) chars · \(durationText)s")
                 self.recordingOverlay.endRelaySession()
                 self.statusBarController?.endRelaySession()
                 self.relayIsFinalizing = false
                 self.relaySegmentsInserted = 0
+                self.relaySessionChars = 0
+                self.relaySessionStartedAt = nil
             } else {
                 self.recordingOverlay.dismiss()
             }

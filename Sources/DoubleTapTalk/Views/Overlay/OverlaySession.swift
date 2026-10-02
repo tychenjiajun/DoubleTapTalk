@@ -103,8 +103,8 @@ enum OverlaySessionCopy {
 
     static func uploading(language: OverlayLanguage) -> String {
         switch language {
-        case .simplifiedChinese: return "识别中…"
-        case .english: return "Uploading…"
+        case .simplifiedChinese: return "云端转写中…"
+        case .english: return "Transcribing…"
         }
     }
 
@@ -115,18 +115,21 @@ enum OverlaySessionCopy {
         }
     }
 
-    /// Shown right after a segment lands in the document.
-    static func inserted(characters: Int, language: OverlayLanguage) -> String {
+    /// Shown right after a segment lands in the document. The segment number
+    /// answers "where am I in the session" — a long dictation is a series of
+    /// receipts, and the user must be able to map them onto what they said.
+    static func inserted(segment: Int, characters: Int, language: OverlayLanguage) -> String {
         switch language {
-        case .simplifiedChinese: return "✓ 已插入 · \(characters) 字"
-        case .english: return "✓ Inserted · \(characters) chars"
+        case .simplifiedChinese: return "第 \(segment) 段 · ✓ 已插入 · \(characters) 字"
+        case .english: return "Seg \(segment) · ✓ Inserted · \(characters) chars"
         }
     }
 
-    static func skipped(language: OverlayLanguage) -> String {
+    /// A rotation with no recognized words, with the segment number it belongs to.
+    static func skipped(segment: Int, language: OverlayLanguage) -> String {
         switch language {
-        case .simplifiedChinese: return "无语音，已跳过"
-        case .english: return "No speech · skipped"
+        case .simplifiedChinese: return "第 \(segment) 段 · 无语音，已跳过"
+        case .english: return "Seg \(segment) · No speech · skipped"
         }
     }
 

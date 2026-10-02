@@ -144,6 +144,13 @@ final class ContinuousDictationSession {
     private var idleTask: Task<Void, Never>?
     private let idleCheckInterval: TimeInterval = 0.5
 
+    /// Segments finalized so far (rotated + the one closed by `stop`), for the
+    /// session-audio summary line.
+    private(set) var segmentsFinalized = 0
+    /// When the microphone opened; the session summary reports how long the
+    /// audio tap actually ran (it never stops between rotations).
+    private let audioOpenedAt = Date()
+
     init(idleThreshold: TimeInterval) {
         self.idleThreshold = idleThreshold
     }
@@ -162,6 +169,9 @@ final class ContinuousDictationSession {
 
         private let activityLock = NSLock()
         private var activity = RelaySegmentActivity()
+        /// Highest tap RMS seen during this segment; > 0.02 means real speech
+        /// was captured (read in `finalizeSegment`'s result log).
+        private var audioPeak: Float = 0
         private let gateLock = NSLock()
         private var closeGate = RelaySegmentCloseGate()
 
@@ -174,6 +184,18 @@ final class ContinuousDictationSession {
         func observeBestText(_ text: String) {
             activityLock.lock(); defer { activityLock.unlock() }
             _ = activity.observe(text: text)
+        }
+
+        /// Feeds the tap's RMS level into the segment's peak tracker (called
+        /// on the audio tap thread, read at finalize — guarded by activityLock).
+        func noteAudio(level: Float) {
+            activityLock.lock(); defer { activityLock.unlock() }
+            audioPeak = max(audioPeak, level)
+        }
+
+        var peakAudioLevel: Float {
+            activityLock.lock(); defer { activityLock.unlock() }
+            return audioPeak
         }
 
         func shouldRotate(now: Date, threshold: TimeInterval) -> Bool {
@@ -283,9 +305,10 @@ final class ContinuousDictationSession {
 
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { [weak self] buffer, _ in
             guard let self else { return }
-            self.onAudioLevel?(AudioLevel.rms(of: buffer))
+            let level = AudioLevel.rms(of: buffer)
+            self.onAudioLevel?(level)
             if let mono = self.monoConverter?.buffer(buffer) {
-                self.appendToActive(mono)
+                self.appendToActive(mono, level: level)
             }
         }
 
@@ -347,9 +370,12 @@ final class ContinuousDictationSession {
         await emissions.drain()
 
         guard let segment else {
+            logger.info("Relay session audio: \(segmentsFinalized) segments · \(String(format: "%.1f", Date().timeIntervalSince(audioOpenedAt)))s total · last: none")
             return SegmentTranscript(text: "", recordingFileURL: nil)
         }
-        return await finalizeSegment(segment)
+        let result = await finalizeSegment(segment)
+        logger.info("Relay session audio: \(segmentsFinalized) segments finalized · open \(String(format: "%.1f", Date().timeIntervalSince(audioOpenedAt)))s · last: '\(result.text)'")
+        return result
     }
 
     // MARK: - Segment rotation
@@ -455,6 +481,7 @@ final class ContinuousDictationSession {
     /// The engine keeps running — the tap feeds the (already swapped-in) new
     /// segment while Apple finishes the old one.
     private func finalizeSegment(_ segment: Segment) async -> SegmentTranscript {
+        let began = Date()
         // Closing FIRST is what makes the wait short: our own cancellation
         // arrives as an error callback, not a final result.
         segment.beginClosing()
@@ -476,16 +503,28 @@ final class ContinuousDictationSession {
             segment.recorder?.cancel()
             recordingURL = nil
         }
-        logger.info("Relay segment result: '\(text)' (recording: \(recordingURL?.path ?? "skipped"))")
+        segmentsFinalized += 1
+
+        // One line with everything the "did it record and how fast" questions
+        // need: finalize latency (close gate), peak audio, WAV size + duration.
+        let finalizeMs = Int(Date().timeIntervalSince(began) * 1000)
+        let peak = segment.peakAudioLevel
+        let sizeBytes = recordingURL.flatMap { url -> Int? in
+            (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int
+        }
+        let audioSeconds = sizeBytes.map { String(format: "%.1fs", Double($0) / 32000.0) } ?? "-"
+        let sizeKB = sizeBytes.map { String(format: "%.1fKB", Double($0) / 1024.0) } ?? "-"
+        logger.info("Relay segment result: '\(text)' · peak \(String(format: "%.2f", peak)) · finalize \(finalizeMs)ms · audio \(audioSeconds) (\(sizeKB)) → \(recordingURL?.path ?? "none")")
         return SegmentTranscript(text: text, recordingFileURL: recordingURL)
     }
 
     // MARK: - Tap → active segment
 
-    private func appendToActive(_ buffer: AVAudioPCMBuffer) {
+    private func appendToActive(_ buffer: AVAudioPCMBuffer, level: Float) {
         guard let segment = activeSegment() else { return }
         segment.request.append(buffer)
         segment.recorder?.append(buffer)
+        segment.noteAudio(level: level)
     }
 
     private func activeSegment() -> Segment? {
