@@ -155,6 +155,47 @@ final class OverlayMetricsTests: XCTestCase {
         }
     }
 
+    // MARK: - Wrap only after growing horizontally
+
+    func testCJKWiderThanLatin() {
+        let cjk = OverlayMetrics.estimatedTextWidth(for: String(repeating: "中", count: 10))
+        let latin = OverlayMetrics.estimatedTextWidth(for: String(repeating: "a", count: 10))
+        XCTAssertGreaterThan(cjk, latin, "CJK glyphs are ~1 em wide, latin ~0.5 em")
+        XCTAssertEqual(latin, 10 * OverlayMetrics.fontSize * 0.52, accuracy: 0.01)
+    }
+
+    func testShortSentenceStaysOnOneLineWhileGrowing() {
+        // ~25-30 Chinese characters must still be one line: the capsule keeps
+        // widening and only wraps once it is clamped at maxWidth.
+        for count in [10, 20, 25, 30] {
+            let text = String(repeating: "中", count: count)
+            let width = OverlayMetrics.capsuleWidth(for: text)
+            XCTAssertLessThan(width, OverlayMetrics.maxWidth, "\(count) chars should not hit max width yet")
+            XCTAssertEqual(OverlayMetrics.lineCount(for: text, width: width), 1,
+                           "\(count) Chinese characters must not wrap yet")
+            XCTAssertEqual(OverlayMetrics.capsuleHeight(for: text), OverlayMetrics.baseHeight)
+        }
+    }
+
+    func testWrappingStartsAfterMaxWidth() {
+        let text = String(repeating: "中", count: 60)
+        let width = OverlayMetrics.capsuleWidth(for: text)
+        XCTAssertEqual(width, OverlayMetrics.maxWidth)
+        XCTAssertGreaterThan(OverlayMetrics.lineCount(for: text, width: width), 1,
+                             "past max width the sentence wraps instead of growing further")
+    }
+
+    func testWideCharacterClassification() {
+        XCTAssertTrue(OverlayMetrics.isWide("中"))
+        XCTAssertTrue(OverlayMetrics.isWide("あ"))
+        XCTAssertTrue(OverlayMetrics.isWide("한"))
+        XCTAssertTrue(OverlayMetrics.isWide("１"))   // fullwidth digit
+        XCTAssertTrue(OverlayMetrics.isWide("😀"))
+        XCTAssertFalse(OverlayMetrics.isWide("a"))
+        XCTAssertFalse(OverlayMetrics.isWide("7"))
+        XCTAssertFalse(OverlayMetrics.isWide("."))
+    }
+
     // MARK: - Elapsed seconds label
 
     func testElapsedLabelUnderOneMinuteShowsSeconds() {

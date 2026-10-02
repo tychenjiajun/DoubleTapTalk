@@ -45,8 +45,8 @@ final class RecordingOverlayPanel: NSPanel {
         startRecordingTimer()
 
         let width = OverlayMetrics.capsuleWidth(for: text)
-        let height = OverlayMetrics.capsuleHeight(for: text)
         layoutLabel(for: width)
+        let height = measuredHeight(for: text, width: width)
         let frame = centeredFrame(width: width, height: height)
         setFrame(NSRect(x: frame.minX, y: frame.minY - 14, width: width, height: height), display: false)
         alphaValue = 0
@@ -69,8 +69,8 @@ final class RecordingOverlayPanel: NSPanel {
         // Elastic width/height transition: a long sentence wraps and the
         // capsule grows vertically instead of truncating.
         let width = OverlayMetrics.capsuleWidth(for: text)
-        let height = OverlayMetrics.capsuleHeight(for: text)
         layoutLabel(for: width)
+        let height = measuredHeight(for: text, width: width)
         let frame = centeredFrame(width: width, height: height)
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.25
@@ -211,6 +211,18 @@ final class RecordingOverlayPanel: NSPanel {
     /// text area (AppKit needs this to compute a wrapped intrinsic height).
     private func layoutLabel(for width: CGFloat) {
         label.preferredMaxLayoutWidth = max(width - OverlayMetrics.internalPadding, 40)
+    }
+
+    /// Capsule height from the label's *real* wrapped size (AppKit-accurate),
+    /// clamped to `maxLines`; falls back to the pure estimate if AppKit reports
+    /// nothing usable yet.
+    private func measuredHeight(for text: String, width: CGFloat) -> CGFloat {
+        let measured = label.intrinsicContentSize.height
+        guard measured > 0 else {
+            return OverlayMetrics.height(forLines: OverlayMetrics.lineCount(for: text, width: width))
+        }
+        let lines = Int((measured / OverlayMetrics.lineHeight).rounded())
+        return OverlayMetrics.height(forLines: lines)
     }
 
     private func centeredFrame(width: CGFloat, height: CGFloat) -> NSRect {
