@@ -412,6 +412,37 @@ final class ContinuousDictationSession {
         return result
     }
 
+    /// Stops the session WITHOUT delivering the live segment's text: rotated
+    /// segments are still delivered (in order) first, but the active segment is
+    /// closed quietly and its recording discarded — the Backspace stop. The
+    /// user said "nothing more may land in the document", so whatever they were
+    /// still saying is dropped, not injected after the fact.
+    func stopDiscardingActive() async {
+        logger.info("Relay: stopping via Backspace — discarding active segment")
+        idleTask?.cancel()
+        idleTask = nil
+
+        audioEngine.stop()
+        audioEngine.inputNode.removeTap(onBus: 0)
+
+        let segment = claimForStop()
+
+        // Rotated segments still land, in order — they are already the user's
+        // committed words. Only the live segment is dropped.
+        await emissions.drain()
+
+        guard let segment else {
+            logger.info("Relay session audio: \(segmentsFinalized) segments finalized · open \(String(format: "%.1f", Date().timeIntervalSince(audioOpenedAt)))s · active: none")
+            return
+        }
+        segment.beginClosing()
+        segment.task?.finish()
+        segment.request.endAudio()
+        segment.recorder?.cancel()
+        segment.task = nil
+        logger.info("Relay session audio: \(segmentsFinalized) segments finalized · open \(String(format: "%.1f", Date().timeIntervalSince(audioOpenedAt)))s · active segment discarded")
+    }
+
     // MARK: - Segment rotation
 
     /// Builds a fresh segment (recognizer + request + recorder) WITHOUT

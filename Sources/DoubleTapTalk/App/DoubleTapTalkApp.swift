@@ -94,6 +94,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyService?.onHotkeyReleased = { [weak self] in
             self?.stopRecording()
         }
+        hotkeyService?.onBackspaceWhileRecording = { [weak self] in
+            self?.stopRelayViaBackspace()
+        }
         hotkeyService?.start()
         
         // Update status bar to idle state
@@ -332,6 +335,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             statusBarController?.updateState(.recording)
             logger.info("Relay dictation started")
         }
+    }
+
+    /// Backspace while a relay session is live: stop AND discard the active
+    /// segment, then close the session for real. The user is editing the
+    /// document — nothing more may land in it. Only relay mode answers this;
+    /// a one-shot dictation's Backspace is the user's own editing (or tap
+    /// noise), and `relaySession == nil` filters it out.
+    private func stopRelayViaBackspace() {
+        guard let session = relaySession else { return }
+        relaySession = nil
+        relayIsFinalizing = true
+        statusBarController?.markRelayFinalizing()
+        Task {
+            await session.stopDiscardingActive()
+            await MainActor.run { self.completeRelaySession() }
+        }
+    }
+
+    /// Closes the relay session for real: summary log, capsule receipt, menu
+    /// bar reset. Shared by the final-segment injection path (finalize) and the
+    /// Backspace discard path — both mean the session is over.
+    private func completeRelaySession() {
+        let inserted = relaySegmentsInserted
+        let chars = relaySessionChars
+        let duration = relaySessionStartedAt.map { Date().timeIntervalSince($0) }
+        let durationText = duration.map { String(format: "%.1f", $0) } ?? "?"
+        logger.info("Relay session complete: \(inserted) segments inserted · \(chars) chars · \(durationText)s")
+        recordingOverlay.endRelaySession()
+        statusBarController?.endRelaySession()
+        relayIsFinalizing = false
+        relaySegmentsInserted = 0
+        relaySessionChars = 0
+        relaySessionStartedAt = nil
     }
 
     private func stopRecording() {
@@ -653,22 +689,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if self.relayIsFinalizing {
                 if !text.isEmpty {
                     self.relaySegmentsInserted += 1
+                    self.relaySessionChars += text.count
                     self.recordingOverlay.noteFinalSegmentInserted(characters: text.count)
                 }
                 // A relay session closes with a receipt: how much landed, how
-                // long it took, what never made it in. Without it, stopping a
-                // long session looks exactly like a one-shot dictation.
-                let inserted = self.relaySegmentsInserted
-                let chars = self.relaySessionChars
-                let duration = self.relaySessionStartedAt.map { Date().timeIntervalSince($0) }
-                let durationText = duration.map { String(format: "%.1f", $0) } ?? "?"
-                self.logger.info("Relay session complete: \(inserted) segments inserted · \(chars) chars · \(durationText)s")
-                self.recordingOverlay.endRelaySession()
-                self.statusBarController?.endRelaySession()
-                self.relayIsFinalizing = false
-                self.relaySegmentsInserted = 0
-                self.relaySessionChars = 0
-                self.relaySessionStartedAt = nil
+                // long it took, what never made it in. Stopping a long session
+                // must not look like a one-shot dictation.
+                self.completeRelaySession()
             } else {
                 self.recordingOverlay.dismiss()
             }

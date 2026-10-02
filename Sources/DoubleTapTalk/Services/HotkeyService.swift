@@ -9,6 +9,11 @@ final class HotkeyService {
     /// Refinement is governed by settings (every segment refines when enabled),
     /// so there is no longer a no-refinement stop option.
     var onHotkeyReleased: (() -> Void)?
+    /// Fired when the user presses Backspace (delete key) while a recording is
+    /// live. The AppDelegate decides what it means per mode — for relay it is
+    /// "stop and discard the active segment". The key event is NEVER swallowed:
+    /// the user still backspaces normally.
+    var onBackspaceWhileRecording: (() -> Void)?
     
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -107,31 +112,45 @@ final class HotkeyService {
         logger.info("Hotkey service stopped")
     }
     
-    private func handleFlagsChangedEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        guard type == .flagsChanged else {
-            return Unmanaged.passRetained(event)
+    private func handleEvent(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        switch type {
+        case .flagsChanged:
+            handleFlagsChanged(event: event)
+        case .keyDown:
+            handleKeyDown(event: event)
+        default:
+            break
         }
-        
+        return Unmanaged.passRetained(event)
+    }
+
+    private func handleFlagsChanged(event: CGEvent) {
         let flags = event.flags
-        
+
         // Get the key code from the event to help identify which specific key
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-        
+
         // For Control keys, we need to infer left vs right
         // Key code 0x3B (59) is Left Control, 0x3E (62) is Right Control
         let isControl = keyCode == 59 || keyCode == 62
-        
+
         if isControl {
             let controlDown = flags.contains(.maskControl)
             logger.debug("Control key event - keyCode: \(keyCode), down: \(controlDown)")
-            
+
             // Only detect taps when releasing the key
             if !controlDown {
                 handleControlTap()
             }
         }
-        
-        return Unmanaged.passRetained(event)
+    }
+
+    /// Backspace (virtual key 51 = delete) while recording: notify, but let the
+    /// key through — deletion must keep working.
+    private func handleKeyDown(event: CGEvent) {
+        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+        guard keyCode == 51, isRecording else { return }
+        onBackspaceWhileRecording?()
     }
     
     private func handleControlTap() {
@@ -174,13 +193,14 @@ final class HotkeyService {
     
     private func createEventTap() -> Bool {
         let eventMask = (1 << CGEventType.flagsChanged.rawValue)
-        
+            | (1 << CGEventType.keyDown.rawValue)
+
         // Try multiple tap configurations
         let configs: [(tap: CGEventTapLocation, place: CGEventTapPlacement, options: CGEventTapOptions)] = [
             (.cgSessionEventTap, .headInsertEventTap, .defaultTap),
             (.cghidEventTap, .tailAppendEventTap, .listenOnly),
         ]
-        
+
         for config in configs {
             if let tap = CGEvent.tapCreate(
                 tap: config.tap,
@@ -192,7 +212,7 @@ final class HotkeyService {
                         return Unmanaged.passRetained(event)
                     }
                     let service = Unmanaged<HotkeyService>.fromOpaque(refcon).takeUnretainedValue()
-                    return service.handleFlagsChangedEvent(proxy: proxy, type: type, event: event)
+                    return service.handleEvent(proxy: proxy, type: type, event: event)
                 },
                 userInfo: Unmanaged.passUnretained(self).toOpaque()
             ) {
