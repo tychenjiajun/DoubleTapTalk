@@ -43,6 +43,9 @@
 |------|------|
 | Setup & usage | `README.md` |
 | Prompt engineering history | `docs/PROMPT_FIXES.md` |
+| Spoken abandon (segment drop) RFC | `docs/RFC-001-abandon-segment.md` |
+| Polish decision-model RFC (deferred) | `docs/RFC-002-polish-decision.md` |
+| Applying the decision model (Bocha Jev) | `docs/JEV_INTEGRATION.md` |
 | Contribution guide | `CONTRIBUTING.md` |
 | Release pipeline (CI) | `.github/workflows/release.yml` |
 
