@@ -278,10 +278,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let session = ContinuousDictationSession(idleThreshold: DoubleTapTalkSettings.shared.relayIdleThreshold)
         session.onLiveText = { [weak self] text in
-            Task { @MainActor in self?.recordingOverlay.updateLiveText(text) }
+            guard let self else { return }
+            Task { @MainActor in
+                self.recordingOverlay.updateLiveText(text)
+            }
         }
         session.onAudioLevel = { [weak self] level in
-            Task { @MainActor in self?.recordingOverlay.setAudioLevel(level) }
+            guard let self else { return }
+            Task { @MainActor in
+                self.recordingOverlay.setAudioLevel(level)
+            }
         }
         session.onError = { message in
             FileLogger.shared.error("Relay recognition error: \(message)")
