@@ -2,13 +2,35 @@ import Foundation
 import AVFoundation
 import CoreAudio
 
+/// UI-representable microphone permission state,
+/// distinct from the boolean `hasMicrophonePermission`.
+enum MicrophonePermission: Equatable {
+    case authorized
+    case notDetermined
+    case denied
+    case restricted
+
+    var isGranted: Bool { self == .authorized }
+}
+
 /// Service for checking and requesting microphone permission
 final class MicrophonePermissionService {
     static let shared = MicrophonePermissionService()
     private let logger = FileLogger.shared
     
     private init() {}
-    
+
+    /// Current permission state, for the Settings UI.
+    func permission() -> MicrophonePermission {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized: return .authorized
+        case .notDetermined: return .notDetermined
+        case .denied: return .denied
+        case .restricted: return .restricted
+        @unknown default: return .notDetermined
+        }
+    }
+
     /// Check if microphone permission is granted
     func hasMicrophonePermission() -> Bool {
         let status = AVCaptureDevice.authorizationStatus(for: .audio)

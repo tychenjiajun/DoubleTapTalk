@@ -149,9 +149,9 @@ final class OverlaySessionCopyTests: XCTestCase {
     }
 
     func testSegmentIndexIsSingularNotPluralized() {
-        XCTAssertEqual(OverlaySessionCopy.failureLedger(1, language: .english), "⚠︎ 1 not inserted")
-        XCTAssertEqual(OverlaySessionCopy.failureLedger(4, language: .english), "⚠︎ 4 not inserted")
-        XCTAssertEqual(OverlaySessionCopy.failureLedger(1, language: .simplifiedChinese), "⚠︎ 1 段未插入")
+        XCTAssertEqual(OverlaySessionCopy.failureLedger(1, language: .english), "⚠︎ 1 not inserted · re-speak")
+        XCTAssertEqual(OverlaySessionCopy.failureLedger(4, language: .english), "⚠︎ 4 not inserted · re-speak")
+        XCTAssertEqual(OverlaySessionCopy.failureLedger(1, language: .simplifiedChinese), "⚠︎ 1 段未插入 · 可重说")
     }
 
     func testInsertedReceiptCarriesTheCharacterCount() {

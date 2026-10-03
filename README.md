@@ -2,363 +2,142 @@
 
 <div align="center">
 
-**macOS Speech-to-Text Utility | macOS 语音转文字助手**
+**macOS speech-to-text with AI polish** · **macOS 语音转文字 + AI 润色**
 
-Double-tap hotkey activation for lightning-fast transcription and smart AI-polished text input in any application
+Double-tap the Control key anywhere, speak, and get clean text — constantly listening, polished by an LLM, injected into whatever you're typing in.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/macos-13%2B-green.svg)](https://www.apple.com/mac/)
+[![Platform](https://img.shields.io/badge/macOS-13%2B-green.svg)](https://www.apple.com/mac/)
 [![Swift](https://img.shields.io/badge/Swift-5.9-orange.svg)](https://swift.org/)
-[![Version](https://img.shields.io/badge/version-1.0.0-brightgreen.svg)]()
+[![Stars](https://img.shields.io/github/stars/tychenjiajun/DoubleTapTalk?style=social)](https://github.com/tychenjiajun/DoubleTapTalk/stargazers)
 
-📖 [English](#overview) | [中文文档](README_zh-CN.md)
-
----
-
-## 🎯 Overview
-
-DoubleTapTalk transforms how you interact with your Mac. Instead of typing, **speak naturally** and watch your words appear instantly—optionally polished by AI for perfect grammar, context-aware formatting, and professional tone.
-
-### 💡 Why Choose DoubleTapTalk?
-
-| Feature | Benefit |
-|---------|--------|
-| ⚡ **3x Faster Than Typing** | Average speaking speed: 150 wpm vs typing: 40-50 wpm |
-| 🧠 **AI-Powered Polish** | Smart context detection auto-formats text for terminals, emails, code comments, chats |
-| 🔒 **Privacy First** | On-device Apple Speech — no uploads, no API key required |
-| 🌍 **100+ Languages** | Auto-detect or manually select from Chinese, English, Spanish, French, Japanese & more |
-| 🎨 **Zero Learning Curve** | Simple double-tap gesture works everywhere |
-
-<div align="center">
-
-**How It Works**: Double-tap Control → Speak → Text appears (with optional AI polish)!
+[简体中文](README_zh-CN.md) · [Issues](https://github.com/tychenjiajun/DoubleTapTalk/issues)
 
 </div>
 
-
-
-### ✨ Key Features
-
-#### 🎙️ Core Speech Recognition
-- **Double-Tap Activation**: Simple Control+Control gesture to start recording
-- **Simple Stop**: Single-click Control **or press Backspace** — Backspace stops *and* discards the segment you were still saying (deleting keeps working), so "I'm done editing" is one natural key; double-tap Control restarts. AI refinement applies **automatically** whenever it's enabled
-- **Multi-Language Support**: Auto-detect from 100+ languages or manually select
-- **Zero Setup**: No API keys, no accounts, no configuration
-- **Menu Bar Design**: Runs quietly without Dock icon clutter
-- **⚡ Streaming Live Text** (Apple backend): watch your words appear live as you speak
-- **🎛️ Recording Overlay**: while dictation runs, the capsule is a fixed-height status HUD (frameless, bottom-center): one dimmed line of in-progress Apple live text, a live waveform while you speak, a segment/status column (`第 3 段`, `云端转写中…`, `✓ 已插入 · 24 字`, `无语音，已跳过`, `⚠︎ 1 段未插入`), and an elapsed clock that dims until you've actually been talking. It collapses to a slim pill after ~8 s of silence and expands on the first word. Every pipeline stage has its own look — live bars while speaking, a travelling bump while the cloud transcribes or polishes, a checkmark with a green border on insert, orange/red accents for skips and failures.
-- **🔁 Continuous Dictation (the only mode)**: the mic stays open the whole time — after a pause (default 3 s, configurable in Settings) the current segment is recognized + inserted and a new one starts, so you can dictate long passages with thinking breaks. Idle detection uses **waveform voice activity** (not recognition text), so a configured pause is a real pause, not pause + recognizer latency. Segments with no words recognized are skipped entirely — blank audio is never kept or uploaded to cloud ASR.
-- **🧾 Segment Receipts (Relay)**: while a relay session runs, the capsule becomes a fixed-height status HUD (placement unchanged): one dimmed line of in-progress words plus a column showing the segment counter, elapsed time, and what just happened — `识别中…`, `✓ 已插入 · 24 字`, `无语音，已跳过`, and a persistent `⚠︎ N 段未插入` chip if a recognized segment never made it into the document. After ~8 s of silence it collapses to a slim pill and expands again the moment you speak. Ending the session shows a receipt (`✓ 7 段 · 312 字 · 1:42`), and the menu bar carries a live `连续听写中 · 第 3 段 · 1:42` header with an **End Continuous Dictation** item.
-- **🌩️ Cloud Transcription (optional)**: when enabled, the recording is saved as a WAV file and sent to an OpenAI-compatible ASR endpoint (e.g. Aliyun DashScope `qwen3-asr-flash`); any failure falls back to Apple's on-device result. With the feature off, no audio is ever written to disk.
-
-#### 🛡️ On-Device Recognition (Apple)
-
-Speech recognition runs entirely on your Mac using Apple's Speech framework:
-
-| Backend | Type | Best For | Accuracy | Speed |
-|---------|------|----------|----------|--------|
-| **Apple (On-Device)** | Offline ⚡ | Streaming live text, zero setup, privacy | ⭐⭐⭐⭐ | ⚡ Live |
-
-- ⚡ **Streaming**: watch your words appear live as you speak
-- 🔒 **Private**: live text is always Apple on-device; WAV recordings are only written when Cloud Transcription is enabled — stored locally (`~/Library/Application Support/DoubleTapTalk/Recordings/`, last 20 kept) and uploaded only for transcription. Settings shows how much space they use and lets you open the folder or delete them all.
-- 🌍 **Multilingual**: auto-detect or choose zh/en/ja/ko/es/fr/de
-
-> Live text is fixed to Apple's on-device recognition. Cloud transcription only replaces the final inserted text when it succeeds, and falls back to Apple otherwise — including per-segment in relay mode.
-
-#### ✨ AI-Powered Smart Polish
-Optional LLM-powered text enhancement that understands context:
-
-**Supported Providers**: OpenAI GPT-4o, Claude 3, Google Gemini, ModelScope, Ollama (local), LM Studio
-
-**Context-Aware Profiles**:
-- 💻 **Terminal** → Converts imperatives to commands, keeps questions as natural language
-- 💬 **Chat Apps** (Slack, Discord, WeChat) → Casual tone, preserves emojis
-- 📧 **Email** (Mail, Outlook, Gmail) → Professional tone, proper punctuation
-- 💾 **Code Comments** → Concise technical language, no markers
-- 🔍 **Search Bars** → Keyword extraction for clean queries
-- 📈 **Trading Terminals** → Order format conversion with bilingual support
-
-**Examples**:
-```
-Input:  "check if the tests are passing"
-Output: check if the tests are passing ✓ (kept as question)
-
-Input:  "run the test suite"
-Output: npm test ✓ (converted to command)
-
-Input:  "I'm looking for recent build failures in logs"
-Output: I'm looking for recent build failures in logs ✓ (preserved intent)
-```
-
-**✨ What-Changed Preview**: When the AI modifies your text, the overlay shows the polished result behind a green ✓ for a second before injecting — you always see what changed.
-
-**🧠 Segment Context (relay)**: during continuous dictation each segment's refinement prompt includes the **previous segments' ASR/refinement results** (last 8, 120 chars each) so terminology and style stay consistent and prior content is not repeated.
-
-**🚫 Anti-Translation Guard**: Prompts are engineered to never translate or transliterate — English stays English, 中文 stays 中文. Kept compact (~110 tokens) for fast, cheap refinements.
-
-#### 🎯 Smart Context Detection (App-Specific Polish)
-
-Automatically adapts polishing style based on your target application:
-
-| Application | Detected Profile | Behavior |
-|-------------|-----------------|----------|
-| iTerm2, Warp, Terminal | **Terminal** | Converts commands, preserves questions |
-| VS Code, Xcode (text areas) | **Code Comment** | Concise technical comments |
-| VS Code, Sublime (editors) | **Code Editor** | Commit-message style, preserve code |
-| Slack, Discord, WeChat | **Chat/Messaging** | Conversational tone |
-| Mail, Outlook, Gmail | **Email Formal** | Professional punctuation |
-| Chrome URL bar, Spotlight | **Search Query** | Keywords only |
-| 富途牛牛，同花顺，Schwab | **Trading Terminal** | Order format, stock codes |
-| Everything else | **General** | Clean, readable text |
-
-**Requirements for full detection**:
-- ✅ Accessibility permission (to read existing text)
-- ✅ Window title access (for Gmail/browser detection)
-- ✅ Terminal screen buffer (for command context)
-
-#### 👨‍💻 Developer-Friendly Design
-
-Built for extensibility and debugging:
-
-- **Comprehensive Logging**: Real-time debug at `~/Library/Caches/DoubleTapTalk.log`
-- **Helper Scripts**:
-  ```bash
-  ./view-logs.sh watch        # Watch logs in real-time
-  ./check-polish-logs.sh      # Verify polish feature status
-  ./test-injection.sh browser # Test text injection
-  ```
-- **Swift Package Manager**: Clean, modern build system
-- **Modular Architecture**: Easily extend backends and services
-
-### 📋 System Requirements
-
-**Hardware & OS**:
-- macOS 13.0+ (Ventura, Sonoma, Sequoia)
-- Microphone (built-in or external)
-
-**Permissions Needed**:
-- 🔊 **Microphone Access**: For audio recording
-- 🎛️ **Accessibility Permission**: For hotkey detection and text injection
-- 🧠 **Speech Recognition** (Apple backend only): On-device, prompted once when you first use it
-
-**API Keys **— none needed for speech recognition (Apple on-device). LLM polish providers require their own key.
-
-### 🚀 Get Started in 3 Minutes
-
-#### Step 1: Installation
-
-**Option A: Download DMG **(Easiest)
-```bash
-# Download the latest release from GitHub Releases
-doubletap-talk-1.0.0.dmg
-# Drag DoubleTapTalk.app to /Applications
-```
-
-**Option B: Build from Source **(For Developers)
-```bash
-git clone https://github.com/tychenjiajun/voice-key.git
-cd voice-key
-swift build -c release
-open DoubleTapTalk.app
-```
-
-#### Step 2: Grant Permissions
-
-1. **System Settings** → Privacy & Security → Accessibility
-2. Click `+` button and add **DoubleTapTalk.app**
-3. Toggle **Microphone** permission when prompted
-4. Restart DoubleTapTalk after adding permissions
-
-#### Step 3: No Configuration Needed
-
-Click ⚙️ **Settings** in menu bar (or press ⌘,):
-
-1. **Choose your language** (optional): Speech Recognition → Language (auto-detect recommended)
-2. **(Optional) Enable AI Polish**: Connect an LLM provider for smart text enhancement
-
-**💡 Pro Tip**: It just works — double-tap Control and talk. Speech recognition is Apple on-device: no API keys, no servers, no setup.
-
-#### Step 4: Start Using!
-
-1. Watch for microphone icon 🎤 in menu bar
-2. **Double-click Control** → Speak naturally → Release
-3. Text appears instantly in your app! ✨
-
-### ⚙️ Advanced Configuration
-
-#### Speech Recognition Settings
-- **Backend**: Apple (On-Device) — fixed, no configuration
-- **Language**: auto / zh-CN / en / ja / ko / es / fr / de
-
-#### AI Polish Settings (Optional)
-- **Enable/Disable Toggle**: Turn polish on or off instantly
-- **Provider Choice**: OpenAI / Anthropic / Google / ModelScope / Custom
-- **Model Selection**: gpt-4o-mini / claude-3-haiku / gemini-pro / local models
-- **Temperature**: 0.0-1.0 (creativity level)
-- **Custom Base URL**: Connect to self-hosted Ollama, LM Studio, vLLM
-- **Timeout**: 1-30 seconds (prevent hanging, default: 5s)
-- **System Prompt**: Customize polishing behavior per application
-
-#### ⌨️ Hotkey Behavior
-- **Start**: Double-click Control — the mic stays open, segments are recognized + inserted automatically as you pause
-- **Stop**: Single-click Control, or **Backspace** (discards the live segment — nothing more lands), or the menu bar button. Every segment is refined automatically when AI refinement is enabled
-
-**Customization**: Modify trigger keys in source code and rebuild if needed.
-
-### 🔧 For Developers
-
-#### Build & Run
-```bash
-# Debug build (fast iteration)
-swift build
-
-# Run the test suite (66 tests)
-swift test
-
-# Release build (optimized performance)
-swift build -c release
-
-# Run directly from terminal
-.build/debug/DoubleTapTalk
-```
-
-#### Debugging Tools
-```bash
-# Real-time log monitoring
-./view-logs.sh watch
-
-# Check polish feature status
-./check-polish-logs.sh
-
-# Test text injection
-./test-injection.sh browser  # or 'native'
-```
-
-#### Log File Details
-All operations logged to: `~/Library/Caches/DoubleTapTalk.log`
-
-**Log Levels**:
-- **DEBUG**: Full API calls, JSON responses, token usage details
-- **INFO**: State changes, successful operations, user actions
-- **WARN**: Non-critical issues, deprecation notices
-- **ERROR**: Failures with automatic fallback information
-
-### 🛠️ Troubleshooting
-
-#### Hotkeys Not Working? 🔧
-```bash
-1. Quit DoubleTapTalk completely
-2. System Settings → Privacy & Security → Accessibility
-3. Find "DoubleTapTalk", remove it, then re-add
-4. Restart DoubleTapTalk.app
-```
-
-#### Transcription Returns Empty? ❓
-Check logs for error details:
-```bash
-tail -30 ~/Library/Caches/DoubleTapTalk.log | grep -i error
-```
-
-**Common Causes**:
-- 🚫 Invalid or expired API key
-- 🌐 Network connectivity issues
-- ⚠️ Model not supported by chosen backend
-- 🔇 Microphone permission denied
-
-#### AI Polish Fails Gracefully 💡
-If polishing times out or errors occur:
-- Original transcription is used automatically ✅
-- No data loss or app crashes
-- Check timeout settings (increase if needed)
-
-**Still having issues?** Open a GitHub issue with relevant log excerpts!
-
-### 📝 License
-
-MIT License - See [LICENSE](LICENSE) file for details.
-
-### ❓ Frequently Asked Questions
-
-**Q: Is this free to use?**
-A: 100% free and open-source (MIT). Speech recognition uses Apple's built-in on-device engine — no API keys, no usage fees, ever.
-
-**Q: How much does speech recognition cost?**
-A: $0. Recognition is on-device via Apple Speech. The only optional cost is AI polish if you choose a paid LLM provider.
-
-**Q: Can I use this offline?**
-A: Yes! Recognition is fully on-device — no internet connection or API key needed.
-
-**Q: Does this record my conversations in the background?**
-A: Absolutely not! Recording ONLY happens when you actively double-tap Control. No background listening ever occurs.
-
-**Q: Which languages work best?**
-A: Apple Speech supports the languages you've downloaded on your Mac (enable in System Settings → Keyboard → Dictation). English and Chinese have the highest accuracy; Auto mode follows your active keyboard input method (Chinese IME → Chinese, English keyboard → English).
-
-**Q: Can I customize the hotkey?**
-A: Currently it's hardcoded as double-tap Control. Feel free to modify the source code and rebuild—check `HotkeyService.swift`!
-
-**Q: Does AI polish change my meaning?**
-A: No! As of v1.0.0, prompts are designed to preserve your exact intent. It only fixes grammar, removes fillers, and adapts tone per context.
-
-**Q: Can I contribute?**
-A: Absolutely! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. New backend support, bug fixes, and documentation improvements are all welcome!
-
 ---
 
-### 💼 Real-World Use Cases
+## Overview
 
-**For Developers**:
+DoubleTapTalk turns a double-tap of the Control key into a live dictation session. It listens **on-device** with Apple Speech (audio never leaves your Mac), and as you pause, each segment is automatically inserted into the active application — optionally polished by an LLM first so what lands is clean, punctuation-correct text in your original language.
+
+This is a **continuous dictation** utility: the mic stays open for as long as you talk, segments rotate on silence, and every insertion gets a receipt in the overlay so you always know where you are in the session.
+
+## Features
+
+**🎙️ Core dictation**
+- Double-tap Control to start / stop anywhere; no app switching.
+- On-device streaming recognition via Apple Speech — live text appears while you speak, no API key required.
+- Continuous sessions: segments are cut on silence and inserted automatically; Backspace (or a Control tap) stops the session and discards the active segment.
+- Language follows your keyboard input method (auto) or a pinned language (auto / EN / 中文 / ES / FR / DE / JA / KO).
+- A floating capsule overlay shows the live waveform, transcript, and per-segment receipts — every pipeline stage has its own visual state, and it collapses to a slim pill while you're silent.
+
+**✨ AI polishing (optional)**
+- Every segment can be passed through an LLM before insertion, with earlier segments included as context for consistent terminology and style.
+- Conservative by default: fixes recognition errors and punctuation, never rewrites, adds, or translates — your language is preserved.
+- Providers: OpenAI, Anthropic (Claude), Google (Gemini), or any OpenAI-compatible endpoint via custom base URL.
+- App-specific profiles adapt the polish to the target app: terminal, code comments, chat/messaging, formal email, search queries, code editor, trading terminal, general.
+
+**☁️ Cloud transcription (optional)**
+- After a segment finishes, the recording can be sent to an OpenAI-compatible ASR endpoint (default `qwen3-asr-flash`, e.g. Aliyun DashScope) for a more accurate result.
+- Falls back to the Apple result on any failure; WAV recordings are kept only for upload and pruned to the newest 20. Manage them (usage / open folder / delete) in Settings.
+
+**🌐 UI**
+- Fully bilingual (简体中文 + English), following your system language in the overlay, menu bar, and settings.
+- Menu-bar icon reports the live session state and elapsed clock; a dimmed header row updates while dictating.
+
+## Requirements
+
+- macOS 13.0 or later
+- A microphone
+- For AI polish: an API key from OpenAI, Anthropic, or Google (or any OpenAI-compatible endpoint)
+
+## Installation
+
+### 1. Grab the app
+
+Download the latest DMG from [GitHub Releases](https://github.com/tychenjiajun/DoubleTapTalk/releases), mount it, and drag `DoubleTapTalk.app` to `/Applications`.
+
+> For developers building locally, skip ahead to [Development](#development) — `./install.sh` builds, signs, installs, and launches in one step.
+
+### 2. Grant permissions (one time)
+
+On first launch, macOS asks for microphone access. DoubleTapTalk also needs **Accessibility** permission to read the active app's context (existing text in fields, terminal output) for better polishing — you can grant it later without losing core dictation.
+
+Both grants are listed in **Settings › Permissions**, with status and buttons that open the right System Settings pane:
+
+| Permission | Needed for | If missing |
+|---|---|---|
+| Microphone | Speech recognition (required) | No recording can start — grant it in System Settings › Privacy & Security › Microphone, then hit **Refresh** |
+| Accessibility | Reading app context for polish (recommended) | Polish works, but loses surrounding context |
+
+> ℹ️ **Known macOS quirk:** with hardened runtime, a revoked mic permission can leave the app missing from the Microphone pane entirely, so it looks un-grantable. If the toggle is missing, re-launch from `/Applications` (never from a build folder) and check the pane again.
+
+## Usage
+
+1. **Double-tap Control** — the capsule appears and listening starts.
+2. Speak. Text appears live. When you pause, the segment is finalized, polished (if enabled), and inserted into the active app — the overlay shows a receipt (`Seg 3 · ✓ Inserted · 24 chars`).
+3. Keep talking; long sessions rotate through segments automatically.
+4. **Single-tap Control or Backspace** to end the session. A summary receipt shows what landed, how many characters, and how long it took.
+
+While a session runs, the menu bar shows a live header (segment count + clock) and an **End Continuous Dictation** item — the fallback for stopping without reaching for the hotkey.
+
+## Settings
+
+- **Permissions** — microphone and Accessibility status with System Settings deep links.
+- **Speech Recognition** — recognition language (auto-follow or pinned).
+- **Continuous Dictation** — segment idle threshold (how long silence must last before a segment is cut; shorter = snappier, longer = fewer splits).
+- **AI Text Polishing** — enable/disable, provider, API key, model, temperature, timeout, custom system prompt, and app-specific profiles.
+- **Cloud Transcription** — OpenAI-compatible ASR endpoint, model, and recordings management.
+- **Reset** — restore every setting to defaults (wipes API keys too — confirmation required).
+
+## Development
+
+Swift Package Manager, no external dependencies; the Xcode project is generated by [XcodeGen](https://github.com/yonaskolb/XcodeGen) from `project.yml`.
+
 ```bash
-# Write commit messages without typing
-"fix the memory leak in user authentication module"
-→ "Fix memory leak in user authentication module"
-
-# Terminal commands hands-free
-"show me the last 20 git commits"
-→ "git log --oneline -20"
+swift build                                   # debug build
+swift test                                    # all tests (212)
+swift test --filter PolishProfileTests        # one test file
+xcodegen generate                             # regenerate the Xcode project after adding files
+swift build -c release                        # release build
+./install.sh                                  # build, sign with the stable local identity, install to /Applications, launch
+./package.sh                                  # local DMG (CI builds the official release DMG)
 ```
 
-**For Writers & Content Creators**:
-- Draft emails 3x faster with natural speech
-- Polish blog posts with AI-enhanced grammar
-- Switch between casual (chat) and formal (email) tone instantly
+**Signing matters:** macOS TCC drops microphone/accessibility grants when the app is re-signed ad-hoc (the Designated Requirement becomes a cdhash that changes every rebuild). `./install.sh` signs with the stable local identity `DoubleTapTalk Local Signing` — created once by `./scripts/setup-signing-identity.sh` — so grants survive rebuilds. Always run the `/Applications` copy, never one from a build folder.
 
-**For Researchers & Academics**:
-- Dictate notes during lectures/meetings
-- Generate technical comments in research code
-- Convert ideas to search queries for literature review
+**Live prompt evals** (hits OpenRouter, needs a key — skipped otherwise):
 
-**For Traders **(Chinese Platforms Supported)
-- Execute trade orders via voice (富途牛牛，同花顺)
-- Bilingual command recognition (English + Chinese)
-- Automatic order format conversion
+```bash
+OPENROUTER_API_KEY=sk-or-... swift test --filter RefinementPromptEvalTests
+```
 
-### 🤝 Contributing
+### Logs & debugging
 
-Contributions are **highly welcome**! 💙 Whether you're fixing bugs, adding new backends, improving docs, or suggesting features—every contribution matters.
+Logs go to `~/Library/Caches/DoubleTapTalk.log` (timestamps are **UTC**; if you're in UTC+8, add 8 hours). Every LLM round-trip logs the endpoint/model before sending and the latency after.
 
-👉 See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines on how to get started.
+```bash
+./view-logs.sh watch          # tail -f the log
+./check-polish-logs.sh        # polish pipeline summary from the log
+./test-injection.sh browser   # test text injection into a browser (or: native)
+```
 
-### 📄 Documentation
+## Troubleshooting
 
-- [English Version](README.md) (this file)
-- [中文版本](README_zh-CN.md)
-- [Prompt Engineering Fixes](docs/PROMPT_FIXES.md) - Technical details on LLM polish improvements
-- [Contributing Guide](CONTRIBUTING.md) - How to contribute to the project
+- **Nothing happens on double-tap Control** → check the menu-bar mic icon. If it's crossed out, the microphone permission is missing: Settings › Permissions shows the exact state with a deep link to the Microphone pane.
+- **Recognition returns no text** → make sure macOS Dictation is enabled (System Settings › Keyboard › Dictation); the app deliberately avoids forcing on-device mode, which fails when dictation is off.
+- **Polished text is missing** → polishing is optional and fails gracefully: the raw transcript is inserted instead. Check `./check-polish-logs.sh` for `LLM request failed ← … after Nms` lines.
+- **Which provider/model did that request hit?** → every request logs `LLM request → <endpoint> (transport, model, timeout)` *before* sending, so latency is always attributable.
 
----
+## FAQ
 
-<div align="center">
+**Does my audio leave the Mac?** Only if you enable Cloud Transcription — then the *recording file* is sent to your configured ASR endpoint. Live recognition and (if you skip cloud ASR) the whole default pipeline are fully on-device. The LLM polish sends only the transcribed text + context to your chosen provider.
 
-**Made with ❤️ by [Jiajun Chen](https://github.com/tychenjiajun)** | Open Source under [MIT License](LICENSE)
+**Which apps does it work in?** Anything that accepts keyboard input — browsers, terminals, editors, chat apps. App-specific polish profiles tune the LLM prompt per target (e.g. terminal commands vs. chat messages).
 
----
+**Why does it sometimes ignore what I said?** Segments with no recognized words are skipped quietly; segments that fail to insert are called out in the overlay (`⚠︎ N not inserted`) so you can re-speak them.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/macos-13%2B-green.svg)](https://www.apple.com/mac/)
-[![Swift](https://img.shields.io/badge/Swift-5.9-orange.svg)](https://swift.org/)
-[![Stars](https://img.shields.io/github/stars/tychenjiajun/voice-key?style=social)](https://github.com/tychenjiajun/voice-key/stargazers)
+## License
 
-📧 **Questions?** Open an [issue](https://github.com/tychenjiajun/voice-key/issues) or reach out!
-
-</div>
+MIT — see [LICENSE](LICENSE). Questions? Open an [issue](https://github.com/tychenjiajun/DoubleTapTalk/issues).

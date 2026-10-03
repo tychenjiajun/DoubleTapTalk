@@ -5,7 +5,7 @@
 set -e
 
 APP_NAME="DoubleTapTalk"
-VERSION="1.0.0"
+VERSION="1.1.0"
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="$PROJECT_DIR/build"
 DMG_OUTPUT="$PROJECT_DIR/DoubleTapTalk-$VERSION.dmg"

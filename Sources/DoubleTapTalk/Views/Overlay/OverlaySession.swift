@@ -119,11 +119,12 @@ enum OverlaySessionCopy {
     }
 
     /// Persistent chip: segments that were recognized but never inserted. The
-    /// user must be able to tell "it heard me" from "it saved my words".
+    /// user must be able to tell "it heard me" from "it saved my words" — and
+    /// what to do about it: the segment is dropped, so it has to be said again.
     static func failureLedger(_ count: Int, language: OverlayLanguage) -> String {
         switch language {
-        case .simplifiedChinese: return count == 1 ? "⚠︎ 1 段未插入" : "⚠︎ \(count) 段未插入"
-        case .english: return count == 1 ? "⚠︎ 1 not inserted" : "⚠︎ \(count) not inserted"
+        case .simplifiedChinese: return count == 1 ? "⚠︎ 1 段未插入 · 可重说" : "⚠︎ \(count) 段未插入 · 可重说"
+        case .english: return count == 1 ? "⚠︎ 1 not inserted · re-speak" : "⚠︎ \(count) not inserted · re-speak"
         }
     }
 

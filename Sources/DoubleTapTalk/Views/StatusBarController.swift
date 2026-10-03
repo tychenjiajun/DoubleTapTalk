@@ -19,6 +19,9 @@ final class StatusBarController: NSObject {
     /// continuous-dictation session can run for minutes, so the menu bar is
     /// where the user confirms the microphone is still open.
     private var statusHeaderItem: NSMenuItem?
+    /// The separator that follows the header row — hidden together with it so
+    /// the menu never starts with a bare divider when no session is running.
+    private var headerSeparatorItem: NSMenuItem?
     private var stopRelayItem: NSMenuItem?
     private var relayClock: Timer?
     private var relayStartedAt: Date?
@@ -42,7 +45,7 @@ final class StatusBarController: NSObject {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = statusItem?.button {
-            button.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "DoubleTapTalk")
+            button.image = NSImage(systemSymbolName: "mic", accessibilityDescription: "DoubleTapTalk")
             button.image?.isTemplate = true
         }
 
@@ -57,7 +60,10 @@ final class StatusBarController: NSObject {
         statusHeaderItem = header
         menu?.addItem(header)
 
-        menu?.addItem(NSMenuItem.separator())
+        let headerSeparator = NSMenuItem.separator()
+        headerSeparator.isHidden = true
+        headerSeparatorItem = headerSeparator
+        menu?.addItem(headerSeparator)
 
         let settingsItem = NSMenuItem(title: menuCopy(settings: "Settings…", zh: "设置…"),
                                        action: #selector(settingsClicked), keyEquivalent: ",")
@@ -102,10 +108,12 @@ final class StatusBarController: NSObject {
 
             switch state {
             case .idle:
-                button.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "DoubleTapTalk - Idle")
+                // "mic" (outline): available but not in use. "mic.fill" is
+                // reserved for the live session so the active state reads clearly.
+                button.image = NSImage(systemSymbolName: "mic", accessibilityDescription: "DoubleTapTalk - Idle")
                 button.image?.isTemplate = true
             case .recording:
-                button.image = NSImage(systemSymbolName: "mic.badge.plus", accessibilityDescription: "DoubleTapTalk - Recording")
+                button.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "DoubleTapTalk - Recording")
                 button.image?.isTemplate = true
             case .processing:
                 button.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: "DoubleTapTalk - Processing")
@@ -184,6 +192,9 @@ final class StatusBarController: NSObject {
         guard let statusHeaderItem else { return }
         statusHeaderItem.title = text ?? ""
         statusHeaderItem.isHidden = (text == nil)
+        // Keep the buddy separator in lockstep so an idle menu starts with
+        // "Settings…" instead of a floating divider.
+        headerSeparatorItem?.isHidden = (text == nil)
     }
 
     // MARK: - Menu state
