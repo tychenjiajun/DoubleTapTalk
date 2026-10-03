@@ -5,11 +5,15 @@ final class LLMService {
     static let shared = LLMService()
     private let logger = FileLogger.shared
     private let session: URLSession
-    
+
+    /// Request-level timeout for every LLM round-trip. A constant so the value
+    /// logged per request can never drift from the value actually applied.
+    static let requestTimeout: TimeInterval = 30
+
     init() {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 30
-        config.timeoutIntervalForResource = 60
+        config.timeoutIntervalForRequest = Self.requestTimeout
+        config.timeoutIntervalForResource = Self.requestTimeout * 2
         self.session = URLSession(configuration: config)
     }
     
@@ -177,6 +181,57 @@ final class LLMService {
         }
     }
     
+    // MARK: - Round-trip logging
+
+    /// One-line description of a failed round-trip, so a timeout is
+    /// distinguishable from a 4xx/5xx in the log.
+    static func describeFailure(_ error: Error) -> String {
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .timedOut:
+                return "timeout after \(Int(requestTimeout))s"
+            case .cancelled:
+                return "cancelled (outer timeout or teardown)"
+            case .notConnectedToInternet:
+                return "no network"
+            default:
+                return "network error \(urlError.code.rawValue): \(urlError.localizedDescription)"
+            }
+        }
+        if error is CancellationError { return "cancelled (outer timeout or teardown)" }
+        if case PipelineError.timeout = error { return "timeout" }
+        return String(describing: error)
+    }
+
+    static func elapsedMs(since start: Date) -> Int {
+        Int((Date().timeIntervalSince(start) * 1000).rounded())
+    }
+
+    /// The single place an LLM round-trip is timed and logged.
+    ///
+    /// The endpoint used to be logged from the *response* side only
+    /// (`OpenAI HTTP Response: …`), so a request that died at the timeout left no
+    /// trace of which provider/model it had hit — which made "which model is
+    /// slow?" unanswerable from the log. Log before sending, then log the outcome
+    /// (success / failure / timeout) with the elapsed time in every case.
+    private func performLLMRequest(
+        transport: String,
+        endpoint: String,
+        model: String,
+        _ operation: () async throws -> (Data, URLResponse)
+    ) async throws -> (Data, URLResponse) {
+        logger.info("LLM request → \(endpoint) (transport: \(transport), model: \(model), timeout: \(Int(Self.requestTimeout))s)")
+        let start = Date()
+        do {
+            let result = try await operation()
+            logger.info("LLM response ← \(endpoint) in \(Self.elapsedMs(since: start))ms")
+            return result
+        } catch {
+            logger.error("LLM request failed ← \(endpoint) after \(Self.elapsedMs(since: start))ms: \(Self.describeFailure(error))")
+            throw error
+        }
+    }
+
     private func callOpenAI(
         apiKey: String,
         model: String,
@@ -213,7 +268,13 @@ final class LLMService {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await performLLMRequest(
+            transport: "openai",
+            endpoint: urlStr,
+            model: model
+        ) {
+            try await self.session.data(for: request)
+        }
         
         logger.debug("OpenAI HTTP Response: \(response)")
         
@@ -301,7 +362,13 @@ final class LLMService {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await performLLMRequest(
+            transport: "anthropic",
+            endpoint: urlStr,
+            model: model
+        ) {
+            try await self.session.data(for: request)
+        }
         
         logger.debug("Anthropic HTTP Response: \(response)")
         
@@ -370,7 +437,13 @@ final class LLMService {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
-        let (data, response) = try await session.data(for: request)
+        let (data, response) = try await performLLMRequest(
+            transport: "google",
+            endpoint: urlStr,
+            model: trimmed
+        ) {
+            try await self.session.data(for: request)
+        }
         
         logger.debug("Google HTTP Response: \(response)")
         

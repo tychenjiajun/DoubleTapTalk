@@ -31,7 +31,7 @@ final class PolishProcessor {
             return rawText
         }
 
-        logger.info("Applying LLM polishing...")
+        logger.info("Applying LLM polishing (timeout \(Int(settings.timeout))s, model: \(settings.model))...")
 
         // Get user locale with region for better localization
         let localeIdentifier = Locale.current.identifier  // e.g., "en_US", "zh_CN"
@@ -79,12 +79,13 @@ final class PolishProcessor {
         logger.debug("  - Terminal context length: \((polishContext.conversationHint?.count ?? 0)) chars")
         logger.debug("  - Previous segments: \(polishContext.previousSegments.count)")
 
+        let startedAt = Date()
         do {
             // Try polishing with configurable timeout
             let polishedText = try await withTimeout(settings.timeout) {
                 try await LLMService.shared.polish(text: rawText, settings: settings, context: polishContext)
             }
-            logger.info("✓ Polished successfully: '\(polishedText.prefix(100))\(polishedText.count > 100 ? "..." : "")'")
+            logger.info("✓ Polished successfully in \(LLMService.elapsedMs(since: startedAt))ms: '\(polishedText.prefix(100))\(polishedText.count > 100 ? "..." : "")'")
 
             // Compare original vs polished
             if polishedText == rawText {
@@ -95,7 +96,7 @@ final class PolishProcessor {
 
             return polishedText
         } catch {
-            logger.error("LLM polishing failed: \(error). Using original text.")
+            logger.error("LLM polishing failed after \(LLMService.elapsedMs(since: startedAt))ms: \(LLMService.describeFailure(error)). Using original text.")
             // Continue with original text
             return rawText
         }
