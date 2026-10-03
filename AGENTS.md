@@ -11,7 +11,7 @@
 | Test one file | `swift test --filter PolishProfileTests` |
 | Regenerate Xcode project | `xcodegen generate` |
 | Release build (.app) | `swift build -c release` or `./package.sh` (DMG) |
-| Install + re-sign | `./install.sh`, then `codesign --force --deep --sign - /Applications/DoubleTapTalk.app` |
+| Install + re-sign + launch | `./install.sh` (one-time: `./scripts/setup-signing-identity.sh`) |
 | Live logs | `./view-logs.sh watch` |
 | Check polish pipeline | `./check-polish-logs.sh` |
 | Live prompt evals (needs key, hits OpenRouter) | `OPENROUTER_API_KEY=sk-or-... swift test --filter RefinementPromptEvalTests` |
@@ -34,7 +34,9 @@
 - The recording overlay has exactly one visual-language source: `Views/Overlay/OverlayState.swift` (`OverlayState` → `OverlayStyle.Resolved`, pure and unit tested) and `Views/Overlay/OverlaySession.swift` (relay HUD copy + `RelaySessionLedger`). Drive it through `RecordingOverlayPanel`'s stage API (`updateLiveText` / `showTranscribing` / `showPolishing` / `showResult` / `showEmpty` / `showError`, plus `beginRelaySession` / `noteSegment*` / `endRelaySession`) — never push raw status strings from the AppDelegate, never change the waveform per call site, and never compute overlay copy there. Continuous dictation is the ONLY mode: the session HUD (fixed height, one truncated line, segment/status column) is the one and only layout.
 - Overlay transitions must set the model value synchronously (`setFrame` / `alphaValue`) and animate on the content layer. `animator()` may be silently dropped (no GUI session, non-key window), which used to strand the capsule at a stale width — never depend on it for geometry or opacity.
 - User-facing overlay copy lives in those tables (zh-Hans + English), not inline; menu-bar copy follows `OverlayStyle.language()` too.
-- The installed app must be re-signed after every rebuild: `codesign --force --deep --sign - /Applications/DoubleTapTalk.app`.
+- Regenerating the project **wipes entitlements**: `project.yml`'s `entitlements:` block makes XcodeGen *generate* `DoubleTapTalk.entitlements` on every `xcodegen generate`, silently discarding anything hand-written into that file. Declare entitlements in `project.yml` under `entitlements.properties` only, and never edit the generated file.
+- `ENABLE_HARDENED_RUNTIME: YES` means every gated TCC service needs its entitlement, otherwise tccd refuses to even *prompt* (`Prompting policy for hardened runtime; service: kTCCServiceMicrophone requires entitlement com.apple.security.device.audio-input but it is missing` → `Policy disallows prompt` → denied). The app then never appears in System Settings, and the **Microphone pane has no "+" button**, so it looks un-grantable. Currently required: `com.apple.security.device.audio-input` (mic) and `com.apple.security.automation.apple-events` (opening `x-apple.systempreferences:` panes). Add the entitlement whenever a new Hardened-Runtime-gated service is introduced.
+- Never sign with `-` (ad-hoc). Ad-hoc signing makes the Designated Requirement a `cdhash`, which changes on every rebuild, so macOS TCC silently drops the Accessibility/Microphone grants: the System Settings toggle stays ON while tccd logs `Failed to match existing code requirement for subject com.jiajun.doubletaptalk`. `./install.sh` signs every build with the stable local identity `DoubleTapTalk Local Signing` (created by `./scripts/setup-signing-identity.sh`, DR = `identifier … and certificate root = H"…"`), so permission is granted once and survives rebuilds. `install.sh` also kills stale copies launched straight out of `build/DerivedData/` — always run the `/Applications` copy, never the DerivedData one.
 
 ## External References
 | Need | File |

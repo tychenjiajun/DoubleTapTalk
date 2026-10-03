@@ -10,9 +10,15 @@ settings:
   base:
     SWIFT_VERSION: "5.9"
     MACOSX_DEPLOYMENT_TARGET: "13.0"
-    CODE_SIGN_STYLE: Automatic
+    # NOT "-": ad-hoc signing makes the Designated Requirement a cdhash, which
+    # changes on every rebuild, so macOS TCC silently drops the Accessibility /
+    # Microphone grants (toggle stays ON, tccd logs "Failed to match existing code
+    # requirement"). Sign with a stable local identity instead — see
+    # scripts/setup-signing-identity.sh. Fall back to "-" only if it's absent.
+    CODE_SIGN_STYLE: Manual
     ENABLE_HARDENED_RUNTIME: YES
-    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_IDENTITY: "DoubleTapTalk Local Signing"
+    CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
 
 targets:
   DoubleTapTalk:
@@ -35,5 +41,21 @@ targets:
         LD_RUNPATH_SEARCH_PATHS:
           - $(inherited)
           - "@executable_path/../Frameworks"
+    # XcodeGen GENERATES this file on every `xcodegen generate` — anything
+    # hand-written into DoubleTapTalk.entitlements is silently wiped. The
+    # properties below are therefore the only source of truth.
+    #
+    # Hardened Runtime (ENABLE_HARDENED_RUNTIME: YES) gates these services, and
+    # when gated tccd refuses to even *prompt*, so the app never appears in
+    # System Settings and the permission looks un-grantable:
+    #   kTCCServiceMicrophone  -> "requires entitlement
+    #     com.apple.security.device.audio-input but it is missing"
+    #   kTCCServiceAppleEvents -> "requires entitlement
+    #     com.apple.security.automation.apple-events but it is missing"
+    # (Apple Events: opening System Settings panes via
+    #  x-apple.systempreferences: URLs. Mirrors VoiceKey.entitlements.)
     entitlements:
       path: DoubleTapTalk.entitlements
+      properties:
+        com.apple.security.device.audio-input: true
+        com.apple.security.automation.apple-events: true
