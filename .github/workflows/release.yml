@@ -1,5 +1,11 @@
 name: Release
 
+# The upload step creates a GitHub Release — softprops/action-gh-release
+# needs write access to contents, otherwise the API answers 403 and the DMG
+# never ships.
+permissions:
+  contents: write
+
 on:
   push:
     tags:
