@@ -7,8 +7,8 @@ Thank you for your interest in contributing to DoubleTapTalk! This document prov
 1. **Fork** the repository on GitHub
 2. **Clone** your fork locally:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/doubletap-talk.git
-   cd doubletap-talk
+   git clone https://github.com/YOUR_USERNAME/DoubleTapTalk.git
+   cd DoubleTapTalk
    ```
 3. **Create a branch** for your changes:
    ```bash
@@ -80,6 +80,22 @@ Use `@Published` for view bindings:
 ```swift
 @Published var llmBaseURL: String? = nil  // ✅ Correct
 ```
+
+### Settings UI conventions
+
+`SettingsView` has two deliberate rules that reviewers expect you to keep:
+
+- **Localization**: every user-facing string goes through the `copy(en:zh:)`
+  helper (which follows `OverlayStyle.language()`), never hardcoded English.
+  The whole app — overlay, menu bar, settings — is bilingual (zh-Hans + English).
+- **Save model**: secrets (API keys) commit explicitly (Save / Clear buttons
+  plus an amber "changes not saved" hint — Keychain writes are not
+  per-keystroke); every other setting binds live. Don't "simplify" one into
+  the other.
+
+The Permissions section surfaces TCC state via
+`MicrophonePermissionService.permission()` with deep links into System
+Settings — keep it in sync when touching permission flows.
 
 ## 🧪 Testing Your Changes
 
@@ -153,7 +169,7 @@ swift build -c release
 
 ### Creating DMG
 ```bash
-./package-dmg.sh
+./package.sh
 ```
 
 ## 🤝 Pull Request Process
@@ -196,7 +212,7 @@ Example:
 **Actual:** Empty result, no error shown
 **Logs:** [paste relevant log lines here]
 **macOS:** 14.2 Sonoma
-**DoubleTapTalk:** v1.0.0
+**DoubleTapTalk:** v1.1.0
 ```
 
 ## 🎨 Style Guide

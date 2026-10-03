@@ -18,10 +18,11 @@ This directory contains technical documentation for DoubleTapTalk developers and
 ## Project Structure
 
 ```
-voice-key/
+DoubleTapTalk/
 ├── README.md                 # Main English documentation
 ├── README_zh-CN.md          # Main Chinese documentation
 ├── CONTRIBUTING.md          # Contribution guidelines
+├── AGENTS.md                # Agent instructions (build system, conventions)
 ├── docs/                    # Technical documentation (this directory)
 │   ├── README.md           # This file - documentation index
 │   ├── PROMPT_FIXES.md     # LLM prompt engineering details
@@ -30,13 +31,15 @@ voice-key/
 │   └── RFC-002-polish-decision.md   # Polish decision RFC (deferred)
 ├── Sources/                 # Application source code
 ├── Tests/                   # Unit tests
+├── Resources/               # Info.plist, asset catalog
 └── Scripts/                 # Helper scripts
 ```
 
 ## Quick Links
 
-- **GitHub Repository**: https://github.com/tychenjiajun/voice-key
-- **Issue Tracker**: https://github.com/tychenjiajun/voice-key/issues
+- **GitHub Repository**: https://github.com/tychenjiajun/DoubleTapTalk
+- **Issue Tracker**: https://github.com/tychenjiajun/DoubleTapTalk/issues
+- **Releases**: https://github.com/tychenjiajun/DoubleTapTalk/releases
 - **Log File Location**: `~/Library/Caches/DoubleTapTalk.log`
 
 ## Need Help?
